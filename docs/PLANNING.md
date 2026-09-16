@@ -66,6 +66,7 @@
    - [x] Native Android ChaCha20-Poly1305 encryption engine (`E2eeManager.kt`).
    - [x] Foreground Service with partial WakeLock for Doze Mode survival (`TerminalMirrorService.kt`).
    - [x] Hardware KeyStore manager (`KeystoreManager.kt`).
+   - [x] Stateful terminal stream buffer processor handling ZLE backspaces and CRLF (`TerminalBufferProcessor.kt`).
 
 7. **CI/CD Automation Pipelines (`.github/workflows/`)**:
    - [x] Android CI (`android-ci.yml`): Automated debug APK build with Gradle 8.7, JDK 17, Android SDK 34, and artifact upload.
@@ -73,7 +74,8 @@
 
 8. **Automated Verification Suites**:
    - [x] 33 Rust tests passing 100% (`cargo test --workspace`).
-   - [x] 5 Python live VPS integration tests passing (`uv run pytest`), validating real Darwin `/bin/zsh` execution over ZeroTier.
+   - [x] 6 Python live VPS integration tests passing (`uv run pytest`), validating real Darwin `/bin/zsh` execution over ZeroTier.
+   - [x] 7 Android unit tests passing (`./gradlew testDebugUnitTest`).
 
 ---
 
