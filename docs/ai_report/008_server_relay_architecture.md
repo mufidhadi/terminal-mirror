@@ -9,7 +9,7 @@
 - **Nama Tugas**: Relay Server Hub Architecture, Zero-Knowledge Routing, and Anti-Abuse Protections
 - **Nama Branch**: `feature/architecture-spec-and-submodules`
 - **Nama & URL Repo**: `terminal-mirror` (`https://github.com/mufidhadi/terminal-mirror`)
-- **Nomor Hash Commit**: `243b1c2`
+- **Nomor Hash Commit**: `09678b6`
 - **Tech Stack**:
   - Language: Rust 1.80+ (Edition 2021)
   - Web & WebSocket Framework: `axum 0.7` (with `ws` feature)
