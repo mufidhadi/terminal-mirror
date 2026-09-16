@@ -1,97 +1,65 @@
 # Security Architecture & Threat Model
-## Project: Terminal Mirror (Open-Source Edition)
+## Project: Terminal Mirror (Hardened Open-Source Edition)
 
 ---
 
 ### 1. Executive Security Posture
 
-In a global open-source environment, users run terminal sessions across untrusted coffee shop Wi-Fi networks, cellular connections, and public community relays.
+Terminal Mirror treats both the network environment and the central relay server as untrusted, potentially hostile environments.
 
-Terminal Mirror enforces a **Zero-Trust Security Architecture**:
-1. **The Relay is Always Untrusted**: Whether using a free community relay or a self-hosted VPS, the relay server is treated as an active adversary position. It never possesses decryption keys.
-2. **Network Agnostic E2EE**: Security does not depend on ZeroTier, WireGuard, or local LAN boundaries. All packets are encrypted at Layer 7 before reaching any network transport.
-3. **One-Time Trust, Zero Friction**: Cryptographic pairing occurs once; persistent device keys prevent credential fatigue while maintaining mutual authentication.
-4. **Immediate Revocation**: The workstation host holds supreme authority, capable of revoking active remote sessions at any moment with an instant physical hotkey.
+The architecture enforces 5 core defensive principles:
+1. **Zero-Knowledge Blind Relay**: The relay forwards ciphertext payloads and cannot decrypt terminal data, keystrokes, or credentials.
+2. **Anti-Abuse Relay Governance**: The relay server enforces strict IP-based connection rate limits (60/min), per-frame size caps (64 KB), and authenticated session keys to prevent misuse as an illegal Reverse Shell / C2 proxy.
+3. **High-Entropy Pairing with 3-Strike Auto-Burn**: Replaces low-entropy 6-digit numeric PINs with **4-word Diceware Passphrases** (~50 bits entropy). Any 3 consecutive failed pairing attempts immediately and permanently incinerate the pairing session.
+4. **Resilient Decoupled Stream Architecture**: Decouples PTY master reading from downstream crypto/network consumers using bounded asynchronous channels, preventing CPU starvation during high-volume output bursts.
+5. **Lossless UTF-8 Boundary Assembly**: Incorporates a streaming multibyte state machine ensuring Unicode emojis and Nerd Fonts glyphs are never corrupted by buffer boundary slicing.
 
 ---
 
-### 2. Cryptographic Architecture
+### 2. STRIDE Threat Model & Mitigations (Hardened)
+
+| STRIDE Category | Threat Scenario | Impact | Defensive Countermeasure in Terminal Mirror |
+| :--- | :--- | :--- | :--- |
+| **Spoofing** | Attacker brute-forces short pairing PINs to hijack a remote workstation. | Critical | **3-Strike Auto-Burn + 4-Word Passphrase**: Host destroys pairing state after 3 failed attempts; passphrases provide 50+ bits of entropy. |
+| **Tampering** | Intermediary relay flips bits in terminal stream to alter commands. | Critical | **AEAD Integrity (ChaCha20-Poly1305)**: Every packet includes an authenticated Poly1305 MAC tag verified before decryption. |
+| **Repudiation** | Client denies executing a destructive command. | Low | **Monotonic Sequence Numbers & Local Audit Log**: Monotonically increasing sequence counters ensure non-repudiation. |
+| **Information Disclosure** | Relay operator or ISP snoops on passwords or code. | Critical | **Layer 7 End-to-End Encryption**: Workstation encrypts data before sending; mobile decrypts locally. Relay sees only opaque ciphertext. |
+| **Denial of Service** | Malicious botnet spams relay with connection floods or massive 1GB frames. | High | **Rate Limiter & 64KB Frame Capping**: Relay drops connections exceeding 60 conn/min per IP and rejects frames > 64 KB. |
+| **Elevation of Privilege** | Attacker uses public relay as an untraceable Reverse Shell / C2 proxy. | Critical | **No Anonymous Relays**: Relay enforces session tokens; self-hosting is prioritized; abuse mitigation policies applied. |
+
+---
+
+### 3. Pairing Protocol & Brute-Force Immunity
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    HOST WORKSTATION                         │
-│  1. Generates Ephemeral Keypair (X25519)                    │
-│  2. Performs Diffie-Hellman Handshake with Mobile Client    │
-│  3. Derives Symmetric Session Key (K_sess) via HKDF-SHA256  │
-└──────────────────────────────┬──────────────────────────────┘
-                               │
-               Ciphertext: ChaCha20-Poly1305
-               [Payload + 16-byte Poly1305 MAC]
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────┐
-│                 RELAY HUB (ZERO-KNOWLEDGE)                  │
-│  • Reads: session_id, sequence, trace_id                    │
-│  • Cannot Read: ciphertext payload                          │
-│  • Forwards opaque binary envelope to subscribed clients    │
-└──────────────────────────────┬──────────────────────────────┘
-                               │
-               Ciphertext: ChaCha20-Poly1305
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────┐
-│                   ANDROID MOBILE CLIENT                     │
-│  1. Authenticates MAC tag using K_sess                      │
-│  2. Decrypts payload into ANSI stream / ScreenStateSync     │
-│  3. Renders clean VT100 grid                                │
-└─────────────────────────────────────────────────────────────┘
+Client (Attacker / User)                     Host Workstation (Daemon)
+          │                                              │
+          ├────────── Attempt 1: "wrong-pass" ───────────► Evaluates: Strike 1/3 (Fails)
+          │◄───────── Response: Err(2 attempts left) ────┤
+          │                                              │
+          ├────────── Attempt 2: "wrong-pass" ───────────► Evaluates: Strike 2/3 (Fails)
+          │◄───────── Response: Err(1 attempt left) ─────┤
+          │                                              │
+          ├────────── Attempt 3: "wrong-pass" ───────────► Evaluates: Strike 3/3!
+          │                                              │ [STATE PERMANENTLY BURNED]
+          │◄───────── Response: Err(0 - BURNED) ─────────┤
+          │                                              │
+          ├────────── Attempt 4: "correct-secret" ───────► REJECTED! Session is dead.
 ```
 
-#### 2.1 Cryptographic Primitives
-* **Key Exchange**: Curve25519 ECDH (X25519) via `snow` or `ring`.
-* **Symmetric Encryption**: **ChaCha20-Poly1305** (AEAD, IETF RFC 8439).
-* **Key Derivation Function**: **HKDF-SHA256** (RFC 5869) combining ephemeral shared secret + pre-shared pairing secret.
-* **Nonce Strategy**: 64-bit monotonically increasing sequence number formatted as a 96-bit nonce $(0^{32} \parallel S_n)$, ensuring nonces are never repeated for a given key.
+* **Passphrase Entropy**: By combining four random words (e.g. `kuda-terbang-batu-merah`) from a wordlist of 7,776 words (Diceware), entropy is $\log_2(7776^4) \approx 51.7$ bits.
+* **Auto-Burn Guarantee**: Even against distributed botnet attacks, three incorrect guesses permanently terminate the session, rendering online brute-force attacks mathematically impossible.
 
 ---
 
-### 3. Pairing & Persistent Device Trust Protocol
+### 4. Lossless Streaming: UTF-8 Multibyte Slicing Guard
 
-#### 3.1 Initial Pairing Handshake (First Contact)
-1. **Host CLI outputs**:
-   * Public Key ($PK_{host}$)
-   * Pairing Secret ($S_{pair}$)
-   * Encoded as an ASCII QR code OR a 6-digit short PIN ($PIN_{otp}$).
-2. **Mobile Client connects via Relay**:
-   * Sends $PK_{client}$ encrypted with $S_{pair}$ / $PIN_{otp}$.
-3. **Mutual Key Exchange**:
-   * Both endpoints derive $K_{sess}$.
-4. **Persistent Fingerprint Storage**:
-   * **Host**: Appends client public key fingerprint to `~/.config/terminal-mirror/authorized_devices.toml`.
-   * **Android**: Saves host descriptor and public key in **Android KeyStore** (`KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT`).
+Terminal emulators frequently encounter multibyte UTF-8 sequences (1 to 4 bytes):
+* Standard ASCII: 1 byte (`A`)
+* Box-drawing / Cyrillic: 2-3 bytes (`┌`, `─`)
+* Emojis / Modern prompt glyphs: 4 bytes (`🚀`, ``)
 
-#### 3.2 Subsequent Daily Reconnections (Known Hosts)
-* Mobile client issues a `SubscribeSession` packet containing an HMAC authentication tag generated with its stored persistent key.
-* Host verifies the HMAC against its authorized devices list.
-* Session stream starts immediately. **No QR scan or manual input required.**
-
----
-
-### 4. Granular Role-Based Access Control (RBAC)
-
-Terminal Mirror implements capability-based tokens:
-
-| Token Type | Capabilities | Typical Use Case |
-| :--- | :--- | :--- |
-| **Interactive Admin Token** | • Receive output stream<br>• Send keystrokes (`TerminalInput`)<br>• Request window resize (`TerminalResize`) | Personal workstation remote control from user's own phone. |
-| **Spectator / Read-Only Token** | • Receive output stream<br>• Receive screen snapshots<br>• **All inputs discarded by Host PTY** | Sharing builds with colleagues, student mentoring, public demos. |
-
----
-
-### 5. Host Emergency Revocation (The Kill Switch)
-* **Physical Hotkey**: Pressing `Ctrl + Shift + Q` in the host terminal immediately triggers `SessionRevoked`.
-* **Action**:
-  1. Closes all active WebSocket connections to the relay.
-  2. Rotates the ephemeral session key.
-  3. De-registers the session ID from the relay.
-  4. Returns the host terminal to normal un-streamed mode.
+When a 4-byte character is split across a 4096-byte chunk boundary:
+* `Utf8StreamChunker` detects trailing partial bytes via `std::str::from_utf8` error slicing.
+* Incomplete bytes (1-3 bytes) are retained in an internal scratch buffer.
+* When the subsequent chunk arrives, bytes are prepended and re-assembled into a valid UTF-8 character, eliminating `InvalidUtf8Sequence` panic crashes and visual `` artifacts.

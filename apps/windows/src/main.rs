@@ -1,13 +1,14 @@
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use std::io::Read;
+use terminal_mirror_protocol::Utf8StreamChunker;
+use tokio::sync::mpsc;
 use tracing::info;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
-    info!("Starting Windows Terminal Mirror Host Agent (ConPTY)...");
+    info!("Starting Windows Terminal Mirror Host Agent (ConPTY Hardened)...");
 
-    // portable-pty automatically invokes Windows ConPTY API on Windows
     let pty_system = native_pty_system();
     let pair = pty_system.openpty(PtySize {
         rows: 24,
@@ -16,7 +17,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         pixel_height: 0,
     })?;
 
-    // Default to PowerShell or cmd.exe on Windows
     let default_shell = std::env::var("COMSPEC").unwrap_or_else(|_| "powershell.exe".to_string());
     let cmd = CommandBuilder::new(default_shell);
     let child = pair.slave.spawn_command(cmd)?;
@@ -24,15 +24,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Spawned ConPTY shell with PID {:?}", child.process_id());
 
     let mut reader = pair.master.try_clone_reader()?;
-    let mut _writer = pair.master.take_writer()?;
+    let _writer = pair.master.take_writer()?;
+
+    let (tx, mut rx) = mpsc::channel::<Vec<u8>>(1024);
 
     tokio::task::spawn_blocking(move || {
-        let mut buf = [0u8; 1024];
+        let mut chunker = Utf8StreamChunker::new();
+        let mut buf = [0u8; 4096];
+
         while let Ok(n) = reader.read(&mut buf) {
             if n == 0 {
                 break;
             }
-            // Stream bytes to relay
+            let valid_utf8 = chunker.process_chunk(&buf[..n]);
+            if !valid_utf8.is_empty() {
+                let _ = tx.blocking_send(valid_utf8);
+            }
+        }
+    });
+
+    tokio::spawn(async move {
+        while let Some(_chunk) = rx.recv().await {
+            // Asynchronous virtual grid processing and network streaming
         }
     });
 

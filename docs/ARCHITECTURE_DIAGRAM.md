@@ -1,141 +1,93 @@
 # Architecture & Design Specifications
-## Project: Terminal Mirror (Open-Source Edition)
+## Project: Terminal Mirror (Hardened Open-Source Edition)
 
 ---
 
-### 1. High-Level System Architecture
-
-```mermaid
-C4Context
-    title System Context - Terminal Mirror (Community & Self-Hosted)
-
-    Person(developer, "Host Engineer", "Runs long-running tasks on workstation.")
-    Person(mobile_user, "Mobile User", "Monitors & interacts via Android phone.")
-    Person(spectator, "Viewer / Mentee", "Observes terminal session in read-only mode.")
-
-    System_Boundary(workstations, "Host Workstations") {
-        System(host_mac, "macOS Host Daemon", "POSIX PTY + vt100 Grid + E2EE")
-        System(host_win, "Windows Host Daemon", "ConPTY + vt100 Grid + Debouncer")
-    }
-
-    System_Boundary(relays, "Relay Infrastructure") {
-        System(public_relay, "Community Rendezvous Relay", "Zero-Knowledge blind router for public use")
-        System(private_relay, "Self-Hosted Private Hub", "Docker Compose on private VPS / ZeroTier")
-    }
-
-    System_Boundary(mobiles, "Client Applications") {
-        System(android_app, "Terminal Mirror Android App", "Multi-tab UI + Termux engine + KeyStore")
-    }
-
-    Rel(developer, host_mac, "Interacts locally with")
-    Rel(developer, host_win, "Interacts locally with")
-    
-    Rel(host_mac, public_relay, "Encrypted Stream (E2EE)", "WSS")
-    Rel(host_win, private_relay, "Encrypted Stream (E2EE)", "WSS / ZeroTier")
-    
-    Rel(android_app, public_relay, "Subscribes (Admin)", "WSS")
-    Rel(android_app, private_relay, "Subscribes (Admin)", "WSS / ZeroTier")
-    
-    Rel(spectator, public_relay, "Subscribes (Spectator)", "WSS")
-```
-
----
-
-### 2. Internal Container Architecture & Virtual Grid Engine
+### 1. Hardened System Architecture Diagram
 
 ```mermaid
 graph TD
     subgraph Host_Daemon["Host Workstation Daemon (Rust)"]
-        PTY["portable-pty Master"]
+        PTY["portable-pty Master (zsh / pwsh)"]
+        UTF8Chunker["Utf8StreamChunker (Multibyte Slicing Guard)"]
+        DecoupledMPSC["Bounded MPSC Channel (Capacity: 1024)"]
         VTGrid["vt100 Parser (Virtual Screen Grid)"]
-        Debouncer["ConPTY Resize Debouncer (200ms)"]
-        RBAC["Role & Auth Filter (Admin vs Spectator)"]
-        CryptoEngine["E2EE Engine (ChaCha20-Poly1305)"]
+        PairGuard["PairingGuard (3-Strikes Auto-Burn)"]
+        CryptoEngine["E2EE Cipher (ChaCha20-Poly1305)"]
         WSTransport["Async WebSocket Client (Tokio)"]
 
-        PTY -->|raw ANSI bytes| VTGrid
-        PTY -->|delta stream| CryptoEngine
+        PTY -->|raw byte stream| UTF8Chunker
+        UTF8Chunker -->|valid UTF-8 chunks| DecoupledMPSC
+        DecoupledMPSC -->|async worker| VTGrid
+        DecoupledMPSC -->|async worker| CryptoEngine
         VTGrid -.->|snapshot on reconnect| CryptoEngine
         CryptoEngine -->|encrypted MessagePack| WSTransport
-        WSTransport -->|incoming packets| RBAC
-        RBAC -->|validated Admin input| PTY
-        RBAC -->|resize event| Debouncer
-        Debouncer -->|debounced resize| PTY
+        PairGuard -.->|auth verification| WSTransport
     end
 
-    subgraph Relay_Server["Relay Hub (VPS / Community)"]
-        Router["Session Hub & Stream Dispatcher (DashMap)"]
+    subgraph Relay_Server["Central Relay Hub (Hardened VPS)"]
+        RateLimiter["IP Rate Limiter (Max 60 conn/min)"]
+        FrameCap["Frame Size Validator (Max 64 KB)"]
+        Router["Session Dispatcher (DashMap)"]
+
+        RateLimiter --> FrameCap
+        FrameCap --> Router
     end
 
-    subgraph Android_Client["Android Mobile Client (Kotlin & Compose)"]
+    subgraph Android_Client["Android Mobile Application"]
+        FgService["TerminalMirrorService (Foreground + Partial WakeLock)"]
         WSClient["OkHttp WebSocket Client"]
         KeyStore["Android KeyStore (Persistent Known Hosts)"]
         Decryptor["E2EE Decryptor"]
-        TabManager["Multi-Session Tab Controller"]
-        TermRenderer["Termux TerminalView (Native Canvas)"]
-        RawKeyIME["Raw Input Interceptor (TYPE_NULL)"]
+        TermView["Termux TerminalView Engine"]
+        RawIME["Raw Input Interceptor (TYPE_NULL)"]
 
+        FgService -->|keeps alive in pocket / Doze mode| WSClient
         WSClient --> Decryptor
-        Decryptor --> TabManager
-        TabManager --> TermRenderer
-        RawKeyIME --> Decryptor
+        Decryptor --> TermView
+        RawIME --> Decryptor
         Decryptor --> WSClient
         KeyStore <--> Decryptor
     end
 
-    WSTransport <==>|Encrypted WSS| Router
+    WSTransport <==>|Encrypted WSS| RateLimiter
     Router <==>|Encrypted WSS| WSClient
 ```
 
 ---
 
-### 3. Sequence Diagrams
+### 2. Sequence Diagram: 3-Strike Auto-Burn Defense
 
-#### 3.1 Headless PIN Pairing Handshake
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Dev as Developer (Laptop)
-    participant Host as Host Daemon
+    actor Attacker as Malicious Script / Botnet
     participant Relay as Relay Hub
-    participant Phone as Android App
+    participant Host as Host Daemon (PairingGuard)
 
-    Dev->>Host: Run `terminal-mirror host`
-    Host->>Relay: Register Session with 6-Digit PIN (e.g. 491-023)
-    Host->>Dev: Display "Pairing PIN: 491-023 (Valid 10m)"
+    Note over Host: Pairing Mode Active: "kuda-terbang-batu-merah"
+    Attacker->>Relay: Try Guess #1: "123456"
+    Relay->>Host: Forward Attempt
+    Host->>Host: PairingGuard: Strike 1/3
+    Host-->>Relay: Err(2 attempts left)
+    Relay-->>Attacker: 401 Unauthorized (2 left)
 
-    Dev->>Phone: Open App -> Enter PIN "491-023"
-    Phone->>Relay: Request Pairing { PIN: 491-023, Client_PublicKey }
-    Relay->>Host: Forward Pairing Request
-    Host->>Host: Verify PIN & Derive Shared Key
-    Host->>Relay: Confirm Pairing { Host_PublicKey, AuthToken }
-    Relay->>Phone: Forward Confirmation
-    Phone->>Phone: Store Host in Android KeyStore ("Known Hosts")
-    Host->>Host: Store Phone in `authorized_devices.toml`
-    Note over Host,Phone: Devices paired permanently! Future connections are 1-tap.
-```
+    Attacker->>Relay: Try Guess #2: "admin1"
+    Relay->>Host: Forward Attempt
+    Host->>Host: PairingGuard: Strike 2/3
+    Host-->>Relay: Err(1 attempt left)
+    Relay-->>Attacker: 401 Unauthorized (1 left)
 
-#### 3.2 Seamless Roaming & Screen Snapshot Resync
-```mermaid
-sequenceDiagram
-    autonumber
-    actor User as Mobile User
-    participant Phone as Android App
-    participant Relay as Relay Hub
-    participant Host as Host Daemon
-    participant VT as vt100 Virtual Grid
+    Attacker->>Relay: Try Guess #3: "password"
+    Relay->>Host: Forward Attempt
+    Host->>Host: PairingGuard: Strike 3/3 -> AUTO-BURN TRIGGERED!
+    Host->>Host: Destroy Session Secret & Invalidate Keys
+    Host-->>Relay: Err(0 - Session Burned)
+    Relay-->>Attacker: 403 Forbidden (Session Burned)
 
-    Note over Host,VT: Running `nvim` with custom statusline
-    Note over Phone: User steps into elevator -> Wi-Fi drops!
-    Phone->>Phone: Detect socket drop -> Exponential backoff reconnect
-    Note over Phone: Elevator doors open -> 4G signal restored!
-    Phone->>Relay: Reconnect WebSocket & Re-subscribe
-    Relay->>Host: Client Reconnected Notification
-    Host->>VT: Fetch current visual screen buffer (lines, cursor, alternate screen)
-    VT-->>Host: ScreenSnapshot (80x24 characters + attributes)
-    Host->>Host: Encrypt `ScreenStateSync { snapshot }`
-    Host->>Relay: Send EncryptedBlob
-    Relay->>Phone: Forward EncryptedBlob
-    Phone->>Phone: Decrypt snapshot & render instantly
-    Note over User,Phone: Screen restores perfectly without garbled characters!
+    Note over Attacker,Host: Even if Attacker guesses correctly on Attempt #4:
+    Attacker->>Relay: Try Guess #4: "kuda-terbang-batu-merah"
+    Relay->>Host: Forward Attempt
+    Host->>Host: Session is permanently dead.
+    Host-->>Relay: 403 Forbidden
 ```

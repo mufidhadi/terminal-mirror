@@ -1,6 +1,6 @@
 use terminal_mirror_protocol::{
-    Packet, PacketPayload, PairingPayload, ScreenSnapshot, SessionRole, TrustedDevice,
-    PROTOCOL_VERSION,
+    Packet, PacketPayload, PairingGuard, PairingPayload, ScreenSnapshot, SessionRole,
+    Utf8StreamChunker, PROTOCOL_VERSION,
 };
 
 #[test]
@@ -78,23 +78,15 @@ fn test_pairing_payload_with_pin_and_trusted_device() {
         pre_shared_key: "k3y_pr3_sh4r3d_s3cur3".to_string(),
         public_key: "pub_k3y_x25519_3x4mpl3".to_string(),
         pin_code: Some("849201".to_string()),
+        passphrase_words: Some(vec!["kuda".into(), "terbang".into(), "batu".into(), "merah".into()]),
         expires_at_ms: 1726530000000,
     };
 
-    let qr_string = pairing.to_qr_string().expect("Failed to convert to QR string");
-    assert!(qr_string.contains("849201"));
+    assert_eq!(pairing.formatted_passphrase().unwrap(), "kuda-terbang-batu-merah");
 
+    let qr_string = pairing.to_qr_string().expect("Failed to convert to QR string");
     let parsed = PairingPayload::from_qr_string(&qr_string).expect("Failed to parse from QR string");
     assert_eq!(parsed, pairing);
-
-    let trusted = TrustedDevice {
-        device_id: "macbook-pro-uuid".to_string(),
-        friendly_name: "MacBook Pro M1".to_string(),
-        public_key: "pub_k3y_x25519_3x4mpl3".to_string(),
-        last_relay_url: "wss://relay.example.internal:8443/ws".to_string(),
-        paired_at_ms: 1726530000000,
-    };
-    assert_eq!(trusted.friendly_name, "MacBook Pro M1");
 }
 
 #[test]
@@ -115,4 +107,51 @@ fn test_session_role_subscription() {
     } else {
         panic!("Role mismatch!");
     }
+}
+
+#[test]
+fn test_utf8_stream_chunker_multibyte_slicing() {
+    let mut chunker = Utf8StreamChunker::new();
+
+    // Rocket emoji "🚀" is 4 bytes: [0xF0, 0x9F, 0x9A, 0x80]
+    let rocket_bytes = "🚀".as_bytes();
+    assert_eq!(rocket_bytes.len(), 4);
+
+    // Split rocket in half: 2 bytes in chunk 1, 2 bytes in chunk 2
+    let chunk_1 = vec![b'A', b'B', rocket_bytes[0], rocket_bytes[1]];
+    let chunk_2 = vec![rocket_bytes[2], rocket_bytes[3], b'C'];
+
+    let out_1 = chunker.process_chunk(&chunk_1);
+    // Out 1 should only contain "AB" and withhold the incomplete 2 bytes
+    assert_eq!(out_1, b"AB");
+    assert_eq!(chunker.pending_len(), 2);
+
+    let out_2 = chunker.process_chunk(&chunk_2);
+    // Out 2 should reassemble the full rocket emoji and "C"
+    assert_eq!(out_2, "🚀C".as_bytes());
+    assert_eq!(chunker.pending_len(), 0);
+}
+
+#[test]
+fn test_pairing_guard_three_strikes_auto_burn() {
+    let mut guard = PairingGuard::new("sess-123", "kuda-terbang-batu-merah");
+
+    // 1st wrong attempt
+    let res1 = guard.verify_attempt("wrong-password-1");
+    assert_eq!(res1, Err(2));
+    assert!(!guard.is_burned);
+
+    // 2nd wrong attempt
+    let res2 = guard.verify_attempt("wrong-password-2");
+    assert_eq!(res2, Err(1));
+    assert!(!guard.is_burned);
+
+    // 3rd wrong attempt -> BURNED!
+    let res3 = guard.verify_attempt("wrong-password-3");
+    assert_eq!(res3, Err(0));
+    assert!(guard.is_burned);
+
+    // Even if 4th attempt is the right secret, it must be rejected because it is burned!
+    let res4 = guard.verify_attempt("kuda-terbang-batu-merah");
+    assert_eq!(res4, Err(0));
 }
