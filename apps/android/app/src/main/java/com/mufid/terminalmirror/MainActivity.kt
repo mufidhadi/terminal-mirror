@@ -1,15 +1,14 @@
 package com.mufid.terminalmirror
 
+import android.content.Intent
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
@@ -17,24 +16,53 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mufid.terminalmirror.model.OsType
 import com.mufid.terminalmirror.model.TerminalSession
+import com.mufid.terminalmirror.service.TerminalMirrorService
+import com.mufid.terminalmirror.ui.components.AccessoryBar
+import com.mufid.terminalmirror.ui.components.StatusHeader
+import com.mufid.terminalmirror.ui.components.WorkstationTabs
 
 class MainActivity : ComponentActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Start Foreground Service to keep streaming alive through Doze Mode
+        val serviceIntent = Intent(this, TerminalMirrorService::class.java).apply {
+            action = TerminalMirrorService.ACTION_START
+        }
+        startService(serviceIntent)
+
         setContent {
-            TerminalMirrorApp()
+            TerminalMirrorApp(
+                onEmergencyKill = { session ->
+                    Toast.makeText(
+                        this,
+                        "EMERGENCY KILL DISPATCHED to ${session.hostName} (Ctrl+Shift+Q)",
+                        Toast.LENGTH_LONG
+                    ).show()
+                },
+                onSendKey = { session, key ->
+                    Toast.makeText(
+                        this,
+                        "Key '$key' dispatched to ${session.hostName}",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            )
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TerminalMirrorApp() {
+fun TerminalMirrorApp(
+    onEmergencyKill: (TerminalSession) -> Unit,
+    onSendKey: (TerminalSession, String) -> Unit
+) {
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     var isReadOnly by remember { mutableStateOf(true) }
 
     val sessions = remember {
-        listOf(
+        mutableStateListOf(
             TerminalSession(
                 sessionId = "mac-primary",
                 hostId = "macbook-pro",
@@ -42,37 +70,28 @@ fun TerminalMirrorApp() {
                 osType = OsType.MACOS,
                 shell = "/bin/zsh",
                 isConnected = true,
-                isReadOnly = isReadOnly
+                isReadOnly = true
             ),
             TerminalSession(
                 sessionId = "win-primary",
-                hostId = "windows-laptop",
-                hostName = "ThinkPad Windows (pwsh)",
+                hostId = "thinkpad-x1",
+                hostName = "ThinkPad Win (pwsh)",
                 osType = OsType.WINDOWS,
                 shell = "powershell.exe",
                 isConnected = true,
-                isReadOnly = isReadOnly
+                isReadOnly = true
             )
         )
     }
 
+    val activeSession = sessions.getOrNull(selectedTabIndex)
+
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Terminal Mirror", fontSize = 18.sp) },
-                actions = {
-                    IconButton(onClick = { isReadOnly = !isReadOnly }) {
-                        Icon(
-                            imageVector = if (isReadOnly) Icons.Default.Lock else Icons.Default.LockOpen,
-                            contentDescription = "Toggle Read Only",
-                            tint = if (isReadOnly) Color(0xFF4CAF50) else Color(0xFFF44336)
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFF1E1E1E),
-                    titleContentColor = Color.White
-                )
+            StatusHeader(
+                activeSession = activeSession,
+                isReadOnly = isReadOnly,
+                onToggleReadOnly = { isReadOnly = !isReadOnly }
             )
         }
     ) { innerPadding ->
@@ -82,76 +101,61 @@ fun TerminalMirrorApp() {
                 .padding(innerPadding)
                 .background(Color(0xFF121212))
         ) {
-            TabRow(
+            // Workstation Tabs (Mac / Windows / Linux)
+            WorkstationTabs(
+                sessions = sessions,
                 selectedTabIndex = selectedTabIndex,
-                containerColor = Color(0xFF1E1E1E),
-                contentColor = Color.White
-            ) {
-                sessions.forEachIndexed { index, session ->
-                    Tab(
-                        selected = selectedTabIndex == index,
-                        onClick = { selectedTabIndex = index },
-                        text = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = if (session.osType == OsType.MACOS) Icons.Default.Computer else Icons.Default.LaptopWindows,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(session.hostName, fontSize = 13.sp)
-                            }
-                        }
-                    )
-                }
-            }
+                onTabSelected = { selectedTabIndex = it }
+            )
 
-            // Terminal canvas placeholder (integrated with termux-view)
+            // Hardware Terminal SurfaceView viewport area
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(8.dp)
+                    .padding(6.dp)
                     .background(Color(0xFF000000))
             ) {
-                Text(
-                    text = "[Terminal Canvas: ${sessions[selectedTabIndex].hostName}]\n" +
-                            "Session ID: ${sessions[selectedTabIndex].sessionId}\n" +
-                            "Status: Connected (Real-time Stream)\n" +
-                            "Safety Mode: ${if (isReadOnly) "LOCKED (Read-Only)" else "UNLOCKED (Input Active)"}\n" +
-                            "--------------------------------------------------\n" +
-                            "$ neofetch\n" +
-                            "OS: ${sessions[selectedTabIndex].osType}\n" +
-                            "Uptime: 4 days, 12 hours\n" +
-                            "Relay: Connected via Secure Tunnel\n",
-                    color = Color(0xFF00FF66),
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 12.sp,
-                    modifier = Modifier.padding(8.dp)
-                )
+                if (activeSession != null) {
+                    Text(
+                        text = buildTerminalPreview(activeSession, isReadOnly),
+                        color = Color(0xFF00FF66),
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(10.dp)
+                    )
+                }
             }
 
-            // Virtual Keyboard Accessory Bar
-            if (!isReadOnly) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color(0xFF2D2D2D))
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    val keys = listOf("ESC", "TAB", "CTRL", "ALT", "↑", "↓", "←", "→")
-                    keys.forEach { key ->
-                        Button(
-                            onClick = { /* Send key sequence */ },
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3E3E3E))
-                        ) {
-                            Text(key, fontSize = 11.sp, color = Color.White)
-                        }
-                    }
-                }
+            // Programmer Keyboard Accessory Bar (Visible only when unlocked)
+            if (!isReadOnly && activeSession != null) {
+                AccessoryBar(
+                    onKeyPress = { key -> onSendKey(activeSession, key) },
+                    onEmergencyKill = { onEmergencyKill(activeSession) }
+                )
             }
         }
     }
+}
+
+private fun buildTerminalPreview(session: TerminalSession, isReadOnly: Boolean): String {
+    val lockState = if (isReadOnly) "LOCKED (Read-Only Safety Guard)" else "UNLOCKED (Interactive Keystrokes Active)"
+    return """
+        ┌────────────────────────────────────────────────────────┐
+        │  Terminal Mirror - Mobile Viewer (Termux Engine)       │
+        │  Target Host : ${session.hostName.padEnd(41)}│
+        │  Session ID  : ${session.sessionId.padEnd(41)}│
+        │  Shell Type  : ${session.shell.padEnd(41)}│
+        │  Status Mode : ${lockState.padEnd(41)}│
+        └────────────────────────────────────────────────────────┘
+        
+        $ git status
+        On branch feature/architecture-spec-and-submodules
+        Your branch is up to date with 'origin/feature/architecture-spec-and-submodules'.
+        
+        $ cargo test --workspace
+        test result: ok. 15 passed; 0 failed; 0 ignored; finished in 0.35s
+        
+        $ _
+    """.trimIndent()
 }
