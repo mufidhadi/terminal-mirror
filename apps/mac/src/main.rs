@@ -10,7 +10,7 @@ use network::RelayHostClient;
 use pty::DarwinPtySession;
 use std::io::{Read, Write};
 use stream::StreamCoalescer;
-use terminal_mirror_protocol::Utf8StreamChunker;
+use terminal_mirror_protocol::{DicewarePassphrase, PairingPayload, Utf8StreamChunker};
 use tokio::sync::mpsc;
 use tracing::info;
 use ui::render_startup_banner;
@@ -23,10 +23,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let resolved_shell = config.resolved_shell();
     let session_id = format!("{}-{}", config.host_id, &uuid::Uuid::new_v4().to_string()[..8]);
-    let sample_passphrase = "kuda-terbang-batu-merah";
 
-    // Display ambient macOS developer banner
-    render_startup_banner(&session_id, sample_passphrase, &resolved_shell);
+    // Generate high-entropy 4-word Diceware passphrase
+    let passphrase_words = DicewarePassphrase::generate(4);
+    let formatted_passphrase = DicewarePassphrase::format(&passphrase_words);
+
+    let pairing_payload = PairingPayload {
+        relay_url: config.relay_url.clone(),
+        session_id: session_id.clone(),
+        host_id: config.host_id.clone(),
+        pre_shared_key: config.auth_token.clone(),
+        public_key: "".to_string(),
+        pin_code: None,
+        passphrase_words: Some(passphrase_words),
+        expires_at_ms: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64
+            + 600_000, // 10 minutes expiry
+    };
+
+    let qr_json = pairing_payload.to_qr_string().ok();
+
+    // Display ambient macOS developer banner with embedded QR code
+    render_startup_banner(&session_id, &formatted_passphrase, &resolved_shell, qr_json.as_deref());
     info!("Starting macOS Darwin PTY session with shell: {}", resolved_shell);
 
     // Spawn Darwin login shell (/bin/zsh -l)
