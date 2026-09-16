@@ -12,7 +12,7 @@
 - **Nama Branch**: `feature/mac-interactive-terminal-passthrough`
 - **Nama Repo**: `terminal-mirror`
 - **URL Repo**: `https://github.com/mufidhadi/terminal-mirror`
-- **Nomor Hash Commit**: *(pending commit)*
+- **Nomor Hash Commit**: `933a9cd`
 - **Tech Stack**:
   - **macOS Workstation**: Rust, `crossterm` 0.28 (Raw Mode, TTY Detection), `portable-pty` 0.8 (`/bin/zsh -l`), `tokio` multi-threading (PTY Reader, PTY Writer, Stdin Reader).
   - **Relay Hub**: Axum 0.7 WebSocket, ZeroTier VPN (`172.23.127.184:8888`), Hostinger VPS.

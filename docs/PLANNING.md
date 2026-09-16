@@ -3,8 +3,8 @@
 
 **Repository**: [github.com/mufidhadi/terminal-mirror](https://github.com/mufidhadi/terminal-mirror)  
 **Primary Architect**: mas mufid  
-**Latest Verified Commit**: `d76e132`  
-**Active Working Branch**: `feature/motorola-wireless-debugging-install`  
+**Latest Verified Commit**: `933a9cd`  
+**Active Working Branch**: `feature/mac-interactive-terminal-passthrough`  
 
 ---
 
@@ -15,9 +15,9 @@
 | **Sprint 1: Core Protocol & Workspace Scaffolding** | Multi-crate Rust workspace, MessagePack wire protocol (`Packet`, `ScreenSnapshot`), UTF-8 stream chunker. | **100% DONE** | 11 unit & integration tests pass (`cargo test -p terminal-mirror-protocol`). |
 | **Sprint 2: Server Relay Hub & Production Deployment** | Axum/Tokio WebSocket blind router, IP rate limiter (60/min), Prometheus metrics, ZeroTier isolation, Docker containerization on Hostinger VPS (`172.23.127.184:8888`). | **100% DONE** | Live VPS container healthy, HTTP 200 on `/healthz`, telemetry on `/metrics`, rate-limiting burst block verified. |
 | **Sprint 3: Zero-Knowledge E2EE & Pairing Engine** | ChaCha20-Poly1305 AEAD, deterministic 96-bit sequence nonces, 4-word Diceware generator (~51.7 bits), 3-strike `PairingGuard`, Terminal QR code generator (`Dense1x2`), cross-platform SHA-256 KDF. | **100% DONE** | Cross-platform roundtrip tested across Rust, Kotlin, and Python. Zero relay access to plaintext. |
-| **Sprint 4: Workstation Host Agents (macOS & Windows)** | Darwin PTY (`/bin/zsh -l`) with E2EE integration; Windows ConPTY with 200ms resize debouncer, PowerShell bypass execution policies, startup banners. | **90% DONE** | macOS agent fully integrated and live verified over VPS; Windows agent unit tests passing (8 tests). |
-| **Sprint 5: Android Mobile Client & Pairing UX** | Jetpack Compose UI (workstation tabs, live monospace terminal viewport, accessory keyboard bar), Conscrypt ChaCha20-Poly1305 fallback, OkHttp WebSocket, Foreground Service API 35 compliance, live AVD & Motorola deployment. | **100% DONE** | Live bidirectional streaming verified on AVD API 35 (`Small_Phone`) and physical Motorola smartphone (`moto_g45_5G`) via wireless ADB. |
-| **Sprint 6: Stress-Testing, Optimization & Production Launch** | Zstandard (`zstd`) stream compression, 100 MB/s PTY backpressure stress test (`cat 1GB.log`), Termux engine surface binding, physical Motorola battery profiling. | **40% DONE** | Physical Motorola device wireless debugging connected (`192.168.0.129:5555`); APK installed and active in foreground. |
+| **Sprint 4: Workstation Host Agents (macOS & Windows)** | Darwin PTY (`/bin/zsh -l`) with E2EE integration, crossterm raw mode duplex pass-through; Windows ConPTY with 200ms resize debouncer, PowerShell bypass execution policies, startup banners. | **100% DONE** | macOS agent fully interactive and live verified over VPS; Windows agent unit tests passing (8 tests). |
+| **Sprint 5: Android Mobile Client & Pairing UX** | Jetpack Compose UI (workstation tabs, live monospace terminal viewport, accessory keyboard bar, refresh button), Conscrypt ChaCha20-Poly1305 fallback, OkHttp WebSocket, Foreground Service API 35 compliance, live AVD & Motorola deployment. | **100% DONE** | Live bidirectional streaming verified on AVD API 35 (`Small_Phone`) and physical Motorola smartphone (`moto_g45_5G`) via wireless ADB. |
+| **Sprint 6: Stress-Testing, Optimization & Production Launch** | Zstandard (`zstd`) stream compression, 100 MB/s PTY backpressure stress test (`cat 1GB.log`), Termux engine surface binding, physical Motorola battery profiling. | **50% DONE** | Physical Motorola device live two-way duplex verified; basic coalescer and debouncer active; full soak test pending. |
 
 ---
 
