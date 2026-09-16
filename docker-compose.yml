@@ -7,9 +7,11 @@ services:
       dockerfile: services/relay-server/Dockerfile
     container_name: terminal-mirror-relay
     restart: unless-stopped
+    stop_signal: SIGTERM
+    stop_grace_period: 10s
     ports:
-      # Bind to internal VPN (ZeroTier) / localhost interface in production
-      - "${RELAY_BIND_IP:-127.0.0.1}:${RELAY_PORT:-8080}:8080"
+      # Bind to internal VPN (ZeroTier) / localhost interface in production (default port 8888 avoids Traefik on 8080)
+      - "${RELAY_BIND_IP:-127.0.0.1}:${RELAY_PORT:-8888}:8080"
     environment:
       - RELAY_BIND_ADDR=0.0.0.0:8080
       - RELAY_AUTH_TOKEN=${RELAY_AUTH_TOKEN:-change_this_secret_token}

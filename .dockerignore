@@ -1,0 +1,10 @@
+target/
+.git/
+.github/
+apps/android/
+docs/
+.gemini/
+.idea/
+.vscode/
+*.md
+*.log

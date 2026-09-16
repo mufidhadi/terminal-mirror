@@ -6,7 +6,7 @@ use terminal_mirror_relay::hub::SessionHub;
 use terminal_mirror_relay::metrics::RelayMetrics;
 use terminal_mirror_relay::middleware::IpRateLimiter;
 use terminal_mirror_relay::ws::AppState;
-use terminal_mirror_relay::{create_app, spawn_stale_session_reaper};
+use terminal_mirror_relay::{create_app, shutdown_signal, spawn_stale_session_reaper};
 use tracing::info;
 
 #[tokio::main]
@@ -43,7 +43,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         listener,
         app.into_make_service_with_connect_info::<SocketAddr>(),
     )
+    .with_graceful_shutdown(shutdown_signal())
     .await?;
 
+    info!("Relay server shut down cleanly.");
     Ok(())
 }

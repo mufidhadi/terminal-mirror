@@ -6,16 +6,18 @@ pub mod ws;
 
 use axum::{extract::State, routing::get, Router};
 use std::time::Duration;
+use tower_http::cors::CorsLayer;
 use tracing::info;
 use ws::{ws_handler, AppState};
 
-/// Builds the Axum router with all endpoints and state configured.
+/// Builds the Axum router with all endpoints, CORS, and state configured.
 pub fn create_app(state: AppState) -> Router {
     Router::new()
         .route("/healthz", get(health_check))
         .route("/health", get(health_check))
         .route("/metrics", get(metrics_handler))
         .route("/ws", get(ws_handler))
+        .layer(CorsLayer::permissive())
         .with_state(state)
 }
 
@@ -41,4 +43,29 @@ pub fn spawn_stale_session_reaper(hub: hub::SessionHub, timeout: Duration) -> to
             }
         }
     })
+}
+
+/// Listens for OS shutdown signals (SIGINT/Ctrl+C or Docker SIGTERM) for graceful termination.
+pub async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C signal handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to install SIGTERM signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => info!("Received SIGINT (Ctrl+C), initiating graceful shutdown..."),
+        _ = terminate => info!("Received SIGTERM from Docker orchestrator, initiating graceful shutdown..."),
+    }
 }
