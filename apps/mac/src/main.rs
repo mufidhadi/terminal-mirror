@@ -15,6 +15,26 @@ use tokio::sync::mpsc;
 use tracing::info;
 use ui::render_startup_banner;
 
+struct RawModeGuard(bool);
+
+impl RawModeGuard {
+    fn enter() -> Self {
+        let is_tty = crossterm::tty::IsTty::is_tty(&std::io::stdin());
+        if is_tty {
+            let _ = crossterm::terminal::enable_raw_mode();
+        }
+        Self(is_tty)
+    }
+}
+
+impl Drop for RawModeGuard {
+    fn drop(&mut self) {
+        if self.0 {
+            let _ = crossterm::terminal::disable_raw_mode();
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     dotenvy::dotenv().ok();
@@ -57,12 +77,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     render_startup_banner(&session_id, &formatted_passphrase, &resolved_shell, qr_json.as_deref());
     info!("Starting macOS Darwin PTY session with shell: {}", resolved_shell);
 
+    // Enter raw mode for seamless local keyboard pass-through
+    let _raw_guard = RawModeGuard::enter();
+
     // Spawn Darwin login shell (/bin/zsh -l)
     let pty_session = DarwinPtySession::spawn(&resolved_shell, 80, 24)?;
     let mut reader = pty_session.clone_reader()?;
     let mut writer = pty_session.take_writer()?;
 
-    // Channels for downstream (PTY output -> Relay) and upstream (Mobile input -> PTY)
+    // Channels for downstream (PTY output -> Relay) and upstream (Mobile/Local input -> PTY)
     let (downstream_raw_tx, mut downstream_raw_rx) = mpsc::channel::<Vec<u8>>(1024);
     let (downstream_filtered_tx, downstream_filtered_rx) = mpsc::channel::<Vec<u8>>(1024);
     let (upstream_tx, mut upstream_rx) = mpsc::channel::<Vec<u8>>(256);
@@ -79,12 +102,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             let valid_utf8 = chunker.process_chunk(&buf[..n]);
             if !valid_utf8.is_empty() {
+                // Mirror output directly to local terminal stdout
+                let _ = std::io::stdout().write_all(&valid_utf8);
+                let _ = std::io::stdout().flush();
+
+                // Send to relay for remote mobile subscribers
                 let _ = downstream_raw_tx.blocking_send(valid_utf8);
             }
         }
     });
 
-    // 2. Dedicated blocking PTY Writer thread for remote mobile keystrokes
+    // 2. Dedicated blocking Local Stdin Reader thread (passes local keyboard input to PTY)
+    let local_stdin_tx = upstream_tx.clone();
+    tokio::task::spawn_blocking(move || {
+        let mut stdin = std::io::stdin();
+        let mut buf = [0u8; 1024];
+        while let Ok(n) = stdin.read(&mut buf) {
+            if n == 0 {
+                break;
+            }
+            if local_stdin_tx.blocking_send(buf[..n].to_vec()).is_err() {
+                break;
+            }
+        }
+    });
+
+    // 3. Dedicated blocking PTY Writer thread for local typing and remote mobile keystrokes
     tokio::task::spawn_blocking(move || {
         while let Some(input_bytes) = upstream_rx.blocking_recv() {
             if writer.write_all(&input_bytes).is_err() || writer.flush().is_err() {
