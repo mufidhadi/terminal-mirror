@@ -9,7 +9,7 @@
 - **Nama Tugas**: Zero-Knowledge E2EE ChaCha20-Poly1305 Cryptographic Engine, Diceware Passphrase Generator, and Terminal QR Code Pairing
 - **Nama Branch**: `feature/architecture-spec-and-submodules`
 - **Nama & URL Repo**: `terminal-mirror` (`https://github.com/mufidhadi/terminal-mirror`)
-- **Nomor Hash Commit**: `288e35c`
+- **Nomor Hash Commit**: `8b5796c`
 - **Tech Stack**:
   - Language: Rust 1.80+ (Edition 2021)
   - Cryptography: `chacha20poly1305 0.10` (AEAD Authenticated Encryption)
