@@ -26,6 +26,18 @@ pub struct MacAgentConfig {
     /// Run as background daemon with status indicator
     #[arg(long, default_value_t = false)]
     pub menu_bar: bool,
+
+    /// Disable End-to-End Encryption (plain text mode)
+    #[arg(long, default_value_t = false)]
+    pub no_e2ee: bool,
+
+    /// Optional explicit session ID (defaults to <host_id>-<uuid>)
+    #[arg(long, env = "SESSION_ID")]
+    pub session_id: Option<String>,
+
+    /// Optional explicit passphrase (defaults to 4-word random Diceware)
+    #[arg(long, env = "PASSPHRASE")]
+    pub passphrase: Option<String>,
 }
 
 impl MacAgentConfig {

@@ -1,0 +1,50 @@
+name: Rust Test & Validation
+
+on:
+  push:
+    branches:
+      - main
+      - "feature/**"
+    paths:
+      - "crates/**"
+      - "services/**"
+      - "apps/mac/**"
+      - "apps/windows/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/rust-ci.yml"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  test-linux:
+    name: Test Protocol & Relay Hub (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run Tests (Protocol & Relay Server)
+        run: cargo test -p terminal-mirror-protocol -p terminal-mirror-relay
+
+  test-macos:
+    name: Test macOS Host Agent (Darwin PTY)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run Tests (macOS Agent)
+        run: cargo test -p terminal-mirror-mac
+
+  test-windows:
+    name: Test Windows Host Agent (ConPTY)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run Tests (Windows Agent)
+        run: cargo test -p terminal-mirror-windows

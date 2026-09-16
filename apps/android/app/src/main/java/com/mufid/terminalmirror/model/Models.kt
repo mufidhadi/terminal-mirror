@@ -26,3 +26,18 @@ data class TerminalPacket(
     val payloadType: String,
     val payloadBytes: ByteArray
 )
+
+data class PairingPayload(
+    val relayUrl: String,
+    val sessionId: String,
+    val hostId: String,
+    val preSharedKey: String,
+    val publicKey: String = "",
+    val pinCode: String? = null,
+    val passphraseWords: List<String>? = null,
+    val expiresAtMs: Long = 0L
+) {
+    fun getFormattedPassphrase(): String? {
+        return passphraseWords?.joinToString("-")
+    }
+}

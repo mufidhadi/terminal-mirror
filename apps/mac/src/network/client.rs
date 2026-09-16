@@ -2,7 +2,7 @@ use futures_util::{sink::SinkExt, stream::StreamExt};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
-use terminal_mirror_protocol::{CompressionAlgorithm, Packet, PacketPayload};
+use terminal_mirror_protocol::{CompressionAlgorithm, E2eeCipher, Packet, PacketPayload};
 use tokio::sync::{mpsc, Mutex};
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
@@ -12,6 +12,7 @@ pub struct RelayHostClient {
     pub relay_url: String,
     pub auth_token: String,
     pub session_id: String,
+    pub cipher: Option<Arc<E2eeCipher>>,
     sequence: Arc<AtomicU64>,
 }
 
@@ -21,8 +22,15 @@ impl RelayHostClient {
             relay_url,
             auth_token,
             session_id,
+            cipher: None,
             sequence: Arc::new(AtomicU64::new(0)),
         }
+    }
+
+    /// Attaches an E2EE cipher engine for authenticated zero-knowledge transport
+    pub fn with_cipher(mut self, cipher: Arc<E2eeCipher>) -> Self {
+        self.cipher = Some(cipher);
+        self
     }
 
     /// Constructs the full WebSocket connection URL including authentication and routing parameters.
@@ -57,20 +65,33 @@ impl RelayHostClient {
                     let session_id = self.session_id.clone();
                     let sequence = Arc::clone(&self.sequence);
                     let rx_handle = Arc::clone(&shared_rx);
+                    let cipher_downstream = self.cipher.clone();
+                    let cipher_upstream = self.cipher.clone();
 
                     // Task 1: Forward PTY output frames down to Relay Server
                     let mut forward_downstream = tokio::spawn(async move {
                         let mut rx = rx_handle.lock().await;
                         while let Some(bytes) = rx.recv().await {
                             let seq = sequence.fetch_add(1, Ordering::Relaxed);
-                            let packet = Packet::new(
-                                &session_id,
-                                seq,
+                            let payload = if let Some(cipher) = &cipher_downstream {
+                                match cipher.encrypt(seq, &bytes) {
+                                    Ok(ciphertext) => PacketPayload::EncryptedBlob {
+                                        nonce: seq,
+                                        ciphertext,
+                                    },
+                                    Err(e) => {
+                                        error!("Failed to encrypt downstream frame: {:?}", e);
+                                        continue;
+                                    }
+                                }
+                            } else {
                                 PacketPayload::TerminalOutput {
                                     bytes,
                                     compression: CompressionAlgorithm::None,
-                                },
-                            );
+                                }
+                            };
+
+                            let packet = Packet::new(&session_id, seq, payload);
 
                             if let Ok(encoded) = packet.to_msgpack() {
                                 if sink.send(Message::Binary(encoded)).await.is_err() {
@@ -87,8 +108,23 @@ impl RelayHostClient {
                             match msg {
                                 Message::Binary(bytes) => {
                                     if let Ok(packet) = Packet::from_msgpack(&bytes) {
-                                        if let PacketPayload::TerminalInput { bytes: input_bytes } = packet.payload {
-                                            let _ = up_tx.send(input_bytes).await;
+                                        match packet.payload {
+                                            PacketPayload::EncryptedBlob { nonce, ciphertext } => {
+                                                if let Some(cipher) = &cipher_upstream {
+                                                    match cipher.decrypt(nonce, &ciphertext) {
+                                                        Ok(input_bytes) => {
+                                                            let _ = up_tx.send(input_bytes).await;
+                                                        }
+                                                        Err(e) => {
+                                                            warn!("Failed to decrypt upstream packet (auth tag invalid): {:?}", e);
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            PacketPayload::TerminalInput { bytes: input_bytes } => {
+                                                let _ = up_tx.send(input_bytes).await;
+                                            }
+                                            _ => {}
                                         }
                                     }
                                 }

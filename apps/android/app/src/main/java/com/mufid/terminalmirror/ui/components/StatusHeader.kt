@@ -6,6 +6,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -21,6 +22,7 @@ fun StatusHeader(
     activeSession: TerminalSession?,
     isReadOnly: Boolean,
     onToggleReadOnly: () -> Unit,
+    onOpenScanner: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     TopAppBar(
@@ -44,7 +46,7 @@ fun StatusHeader(
             // Live Status Indicator Chip
             Box(
                 modifier = Modifier
-                    .padding(end = 8.dp)
+                    .padding(end = 4.dp)
                     .background(
                         color = if (activeSession?.isConnected == true) Color(0xFF1B5E20) else Color(0xFFB71C1C),
                         shape = RoundedCornerShape(12.dp)
@@ -55,6 +57,15 @@ fun StatusHeader(
                     text = if (activeSession?.isConnected == true) "● LIVE" else "○ OFFLINE",
                     fontSize = 10.sp,
                     color = Color.White
+                )
+            }
+
+            // QR Code Scanner Action Button
+            IconButton(onClick = onOpenScanner) {
+                Icon(
+                    imageVector = Icons.Default.QrCodeScanner,
+                    contentDescription = "Scan Terminal QR Code",
+                    tint = Color(0xFF58A6FF)
                 )
             }
 

@@ -22,11 +22,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = MacAgentConfig::parse();
 
     let resolved_shell = config.resolved_shell();
-    let session_id = format!("{}-{}", config.host_id, &uuid::Uuid::new_v4().to_string()[..8]);
+    let session_id = config.session_id.clone().unwrap_or_else(|| {
+        format!("{}-{}", config.host_id, &uuid::Uuid::new_v4().to_string()[..8])
+    });
 
-    // Generate high-entropy 4-word Diceware passphrase
-    let passphrase_words = DicewarePassphrase::generate(4);
-    let formatted_passphrase = DicewarePassphrase::format(&passphrase_words);
+    // Generate or use specified 4-word Diceware passphrase
+    let (passphrase_words, formatted_passphrase) = if let Some(custom) = &config.passphrase {
+        let words: Vec<String> = custom.split('-').map(|s| s.to_string()).collect();
+        (words, custom.clone())
+    } else {
+        let words = DicewarePassphrase::generate(4);
+        let formatted = DicewarePassphrase::format(&words);
+        (words, formatted)
+    };
 
     let pairing_payload = PairingPayload {
         relay_url: config.relay_url.clone(),
@@ -101,11 +109,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // 4. Relay WebSocket Network Client (auto-reconnects with exponential backoff)
-    let client = RelayHostClient::new(
+    let mut client = RelayHostClient::new(
         config.relay_url.clone(),
         config.auth_token.clone(),
         session_id.clone(),
     );
+
+    if !config.no_e2ee {
+        let cipher = std::sync::Arc::new(terminal_mirror_protocol::E2eeCipher::from_secret(&formatted_passphrase));
+        client = client.with_cipher(cipher);
+        info!("Zero-Knowledge End-to-End Encryption (ChaCha20-Poly1305) ENABLED.");
+    } else {
+        tracing::warn!("End-to-End Encryption DISABLED by user flag.");
+    }
 
     client.run(downstream_filtered_rx, upstream_tx).await;
 

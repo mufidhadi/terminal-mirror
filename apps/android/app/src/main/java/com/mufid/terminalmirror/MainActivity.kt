@@ -15,9 +15,11 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mufid.terminalmirror.model.OsType
+import com.mufid.terminalmirror.model.PairingPayload
 import com.mufid.terminalmirror.model.TerminalSession
 import com.mufid.terminalmirror.service.TerminalMirrorService
 import com.mufid.terminalmirror.ui.components.AccessoryBar
+import com.mufid.terminalmirror.ui.components.QrScannerDialog
 import com.mufid.terminalmirror.ui.components.StatusHeader
 import com.mufid.terminalmirror.ui.components.WorkstationTabs
 
@@ -47,6 +49,13 @@ class MainActivity : ComponentActivity() {
                         "Key '$key' dispatched to ${session.hostName}",
                         Toast.LENGTH_SHORT
                     ).show()
+                },
+                onPairHost = { payload ->
+                    Toast.makeText(
+                        this,
+                        "Paired with ${payload.hostId} (${payload.sessionId})",
+                        Toast.LENGTH_LONG
+                    ).show()
                 }
             )
         }
@@ -56,10 +65,12 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun TerminalMirrorApp(
     onEmergencyKill: (TerminalSession) -> Unit,
-    onSendKey: (TerminalSession, String) -> Unit
+    onSendKey: (TerminalSession, String) -> Unit,
+    onPairHost: (PairingPayload) -> Unit = {}
 ) {
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     var isReadOnly by remember { mutableStateOf(true) }
+    var showScannerDialog by remember { mutableStateOf(false) }
 
     val sessions = remember {
         mutableStateListOf(
@@ -86,12 +97,40 @@ fun TerminalMirrorApp(
 
     val activeSession = sessions.getOrNull(selectedTabIndex)
 
+    if (showScannerDialog) {
+        QrScannerDialog(
+            onDismiss = { showScannerDialog = false },
+            onPayloadScanned = { payload ->
+                showScannerDialog = false
+                val newSession = TerminalSession(
+                    sessionId = payload.sessionId,
+                    hostId = payload.hostId,
+                    hostName = "${payload.hostId} (paired)",
+                    osType = if (payload.hostId.contains("win", ignoreCase = true)) OsType.WINDOWS else OsType.MACOS,
+                    shell = "remote-pty",
+                    isConnected = true,
+                    isReadOnly = false
+                )
+                val existingIndex = sessions.indexOfFirst { it.sessionId == payload.sessionId }
+                if (existingIndex >= 0) {
+                    sessions[existingIndex] = newSession
+                    selectedTabIndex = existingIndex
+                } else {
+                    sessions.add(newSession)
+                    selectedTabIndex = sessions.size - 1
+                }
+                onPairHost(payload)
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             StatusHeader(
                 activeSession = activeSession,
                 isReadOnly = isReadOnly,
-                onToggleReadOnly = { isReadOnly = !isReadOnly }
+                onToggleReadOnly = { isReadOnly = !isReadOnly },
+                onOpenScanner = { showScannerDialog = true }
             )
         }
     ) { innerPadding ->

@@ -27,6 +27,15 @@ impl E2eeCipher {
         }
     }
 
+    /// Derives a 32-byte key from any arbitrary secret or passphrase using SHA-256
+    pub fn from_secret(secret: &str) -> Self {
+        use sha2::{Digest, Sha256};
+        let hash = Sha256::digest(secret.as_bytes());
+        let mut key_bytes = [0u8; 32];
+        key_bytes.copy_from_slice(&hash);
+        Self::new(&key_bytes)
+    }
+
     /// Derives a 96-bit (12-byte) unique nonce from sequence counter.
     /// Bytes 0..4: padding zeros
     /// Bytes 4..12: big-endian sequence counter
@@ -209,6 +218,20 @@ mod tests {
 
         let result = cipher.decrypt(seq, &ciphertext);
         assert_eq!(result, Err(E2eeError::AuthenticationFailure));
+    }
+
+    #[test]
+    fn test_e2ee_from_secret_passphrase_roundtrip() {
+        let passphrase = "kuda-terbang-angin-gunung";
+        let cipher_sender = E2eeCipher::from_secret(passphrase);
+        let cipher_receiver = E2eeCipher::from_secret(passphrase);
+
+        let plaintext = b"ls -la /Users/mufid";
+        let seq = 101;
+
+        let ciphertext = cipher_sender.encrypt(seq, plaintext).unwrap();
+        let decrypted = cipher_receiver.decrypt(seq, &ciphertext).unwrap();
+        assert_eq!(decrypted, plaintext);
     }
 
     #[test]

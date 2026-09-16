@@ -137,3 +137,93 @@ async fn test_e2e_rate_limiting_blocks_burst() {
     let c3 = connect_async(&url3).await;
     assert!(c3.is_err(), "3rd connection should be rejected with 429 Too Many Requests");
 }
+
+#[tokio::test]
+async fn test_e2e_chacha20poly1305_zero_knowledge_relay() {
+    use terminal_mirror_protocol::E2eeCipher;
+
+    let (addr, token) = spawn_test_server(60).await;
+    let session_id = "e2ee-session-42";
+    let shared_passphrase = "batu-merah-kuda-terbang";
+
+    let host_cipher = E2eeCipher::from_secret(shared_passphrase);
+    let subscriber_cipher = E2eeCipher::from_secret(shared_passphrase);
+
+    // 1. Connect Host Agent
+    let host_url = format!("ws://{addr}/ws?token={token}&session_id={session_id}&role=host");
+    let (ws_host, _) = connect_async(&host_url).await.expect("Host failed to connect");
+    let (mut host_sink, mut host_stream) = ws_host.split();
+
+    // 2. Connect Mobile Subscriber
+    let sub_url = format!("ws://{addr}/ws?token={token}&session_id={session_id}&role=client");
+    let (ws_sub, _) = connect_async(&sub_url).await.expect("Subscriber failed to connect");
+    let (mut sub_sink, mut sub_stream) = ws_sub.split();
+
+    // 3. Host encrypts terminal output and publishes EncryptedBlob downstream
+    let raw_terminal_output = b"\x1b[32muser@vps:~$ htop\x1b[0m\r\n";
+    let seq_down = 1001;
+    let ciphertext_down = host_cipher
+        .encrypt(seq_down, raw_terminal_output)
+        .expect("Host encryption failed");
+
+    let out_packet = Packet::new(
+        session_id,
+        seq_down,
+        PacketPayload::EncryptedBlob {
+            nonce: seq_down,
+            ciphertext: ciphertext_down,
+        },
+    );
+    host_sink.send(Message::Binary(out_packet.to_msgpack().unwrap())).await.unwrap();
+
+    // 4. Subscriber receives EncryptedBlob from Relay and decrypts
+    let sub_msg = sub_stream.next().await.unwrap().unwrap();
+    if let Message::Binary(sub_bytes) = sub_msg {
+        let packet = Packet::from_msgpack(&sub_bytes).unwrap();
+        match packet.payload {
+            PacketPayload::EncryptedBlob { nonce, ciphertext } => {
+                let decrypted = subscriber_cipher
+                    .decrypt(nonce, &ciphertext)
+                    .expect("Subscriber decryption failed");
+                assert_eq!(decrypted, raw_terminal_output);
+            }
+            other => panic!("Expected EncryptedBlob, got: {:?}", other),
+        }
+    } else {
+        panic!("Expected binary WebSocket message");
+    }
+
+    // 5. Subscriber encrypts keystroke upstream and sends EncryptedBlob
+    let raw_keystroke = b":wq\r";
+    let seq_up = 5001;
+    let ciphertext_up = subscriber_cipher
+        .encrypt(seq_up, raw_keystroke)
+        .expect("Subscriber encryption failed");
+
+    let in_packet = Packet::new(
+        session_id,
+        seq_up,
+        PacketPayload::EncryptedBlob {
+            nonce: seq_up,
+            ciphertext: ciphertext_up,
+        },
+    );
+    sub_sink.send(Message::Binary(in_packet.to_msgpack().unwrap())).await.unwrap();
+
+    // 6. Host receives EncryptedBlob from Relay and decrypts keystroke
+    let host_msg = host_stream.next().await.unwrap().unwrap();
+    if let Message::Binary(host_bytes) = host_msg {
+        let packet = Packet::from_msgpack(&host_bytes).unwrap();
+        match packet.payload {
+            PacketPayload::EncryptedBlob { nonce, ciphertext } => {
+                let decrypted = host_cipher
+                    .decrypt(nonce, &ciphertext)
+                    .expect("Host decryption failed");
+                assert_eq!(decrypted, raw_keystroke);
+            }
+            other => panic!("Expected EncryptedBlob upstream, got: {:?}", other),
+        }
+    } else {
+        panic!("Expected binary WebSocket message on host stream");
+    }
+}
