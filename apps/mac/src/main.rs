@@ -1,56 +1,66 @@
-use portable_pty::{native_pty_system, CommandBuilder, PtySize};
+mod config;
+mod pty;
+mod stream;
+mod ui;
+
+use clap::Parser;
+use config::MacAgentConfig;
+use pty::DarwinPtySession;
 use std::io::Read;
+use stream::StreamCoalescer;
 use terminal_mirror_protocol::Utf8StreamChunker;
 use tokio::sync::mpsc;
 use tracing::info;
+use ui::render_startup_banner;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
-    info!("Starting macOS Terminal Mirror Host Agent (Hardened & Decoupled Engine)...");
+    let config = MacAgentConfig::parse();
 
-    let pty_system = native_pty_system();
-    let pair = pty_system.openpty(PtySize {
-        rows: 24,
-        cols: 80,
-        pixel_width: 0,
-        pixel_height: 0,
-    })?;
+    let resolved_shell = config.resolved_shell();
+    let session_id = format!("{}-{}", config.host_id, uuid::Uuid::new_v4().to_string()[..8].to_string());
+    let sample_passphrase = "kuda-terbang-batu-merah";
 
-    let default_shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
-    let cmd = CommandBuilder::new(default_shell);
-    let child = pair.slave.spawn_command(cmd)?;
+    // Display ambient macOS developer banner
+    render_startup_banner(&session_id, sample_passphrase, &resolved_shell);
+    info!("Starting macOS Darwin PTY session with shell: {}", resolved_shell);
 
-    info!("Spawned child shell in PTY with PID {:?}", child.process_id());
+    // Spawn Darwin login shell (/bin/zsh -l)
+    let pty_session = DarwinPtySession::spawn(&resolved_shell, 80, 24)?;
+    let mut reader = pty_session.clone_reader()?;
+    let _writer = pty_session.take_writer()?;
 
-    let mut reader = pair.master.try_clone_reader()?;
-    let _writer = pair.master.take_writer()?;
-
-    // Decoupled async channel to prevent PTY blocking during high-throughput bursts (e.g. `cat big.log`)
+    // Decoupled bounded stream channel (1024 capacity)
     let (tx, mut rx) = mpsc::channel::<Vec<u8>>(1024);
 
-    // Dedicated blocking reader thread with UTF-8 multibyte boundary guard
+    // Dedicated blocking reader thread with UTF-8 boundary slicing guard
     tokio::task::spawn_blocking(move || {
         let mut chunker = Utf8StreamChunker::new();
         let mut buf = [0u8; 4096];
 
         while let Ok(n) = reader.read(&mut buf) {
             if n == 0 {
-                break;
+                break; // Shell terminated (EOF)
             }
-            let valid_utf8_chunk = chunker.process_chunk(&buf[..n]);
-            if !valid_utf8_chunk.is_empty() {
-                // Non-blocking send or drop if downstream is heavily backpressured
-                let _ = tx.blocking_send(valid_utf8_chunk);
+            let valid_utf8 = chunker.process_chunk(&buf[..n]);
+            if !valid_utf8.is_empty() {
+                let _ = tx.blocking_send(valid_utf8);
             }
         }
     });
 
-    // Decoupled worker processing output and maintaining virtual screen grid
+    // Decoupled worker with adaptive coalescer
     tokio::spawn(async move {
-        while let Some(_chunk) = rx.recv().await {
-            // Asynchronous virtual grid processing and network streaming
-            // High-throughput streams skip intermediate frames to preserve host CPU
+        let mut coalescer = StreamCoalescer::new(256 * 1024); // 256 KB threshold
+
+        while let Some(chunk) = rx.recv().await {
+            if coalescer.should_coalesce(chunk.len()) {
+                // Downstream backpressure detected; drop intermediate deltas
+                // and wait for full ScreenStateSync trigger
+                continue;
+            }
+            // Stream chunk downstream to relay
         }
     });
 
