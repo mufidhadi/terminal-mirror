@@ -203,7 +203,14 @@ fun TerminalMirrorApp(
                 activeSession = activeSession,
                 isReadOnly = isReadOnly,
                 onToggleReadOnly = { isReadOnly = !isReadOnly },
-                onOpenScanner = { showScannerDialog = true }
+                onOpenScanner = { showScannerDialog = true },
+                onReconnect = {
+                    activeSession?.let { session ->
+                        val defaultRelayUrl = "ws://172.23.127.184:8888/ws?token=masmufid_super_secret_relay_2026&session_id=${session.sessionId}&role=client"
+                        connectionManager.connectSession(session.sessionId, defaultRelayUrl)
+                        onShowToast("Menyambung ulang ${session.hostId}...")
+                    }
+                }
             )
         }
     ) { innerPadding ->

@@ -7,6 +7,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -23,6 +24,7 @@ fun StatusHeader(
     isReadOnly: Boolean,
     onToggleReadOnly: () -> Unit,
     onOpenScanner: () -> Unit,
+    onReconnect: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     TopAppBar(
@@ -66,6 +68,15 @@ fun StatusHeader(
                     imageVector = Icons.Default.QrCodeScanner,
                     contentDescription = "Scan Terminal QR Code",
                     tint = Color(0xFF58A6FF)
+                )
+            }
+
+            // Manual Reconnect / Refresh Action Button
+            IconButton(onClick = onReconnect) {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = "Reconnect Terminal Session",
+                    tint = Color(0xFF64B5F6)
                 )
             }
 
