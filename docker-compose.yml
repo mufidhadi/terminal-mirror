@@ -8,14 +8,25 @@ services:
     container_name: terminal-mirror-relay
     restart: unless-stopped
     ports:
-      # Bind to internal VPN / localhost interface in production
+      # Bind to internal VPN (ZeroTier) / localhost interface in production
       - "${RELAY_BIND_IP:-127.0.0.1}:${RELAY_PORT:-8080}:8080"
     environment:
       - RELAY_BIND_ADDR=0.0.0.0:8080
       - RELAY_AUTH_TOKEN=${RELAY_AUTH_TOKEN:-change_this_secret_token}
+      - MAX_CONN_PER_MIN=${MAX_CONN_PER_MIN:-60}
+      - MAX_PAYLOAD_BYTES=${MAX_PAYLOAD_BYTES:-65536}
+      - STALE_SESSION_TIMEOUT_SECS=${STALE_SESSION_TIMEOUT_SECS:-300}
       - RUST_LOG=info
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
+        reservations:
+          cpus: "0.10"
+          memory: 32M
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
       interval: 15s
       timeout: 5s
       retries: 3
