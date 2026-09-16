@@ -14,4 +14,4 @@ echo " Passphrase: batu-merah-kuda-terbang"
 echo "================================================================="
 echo ""
 
-./target/debug/terminal-mirror-mac
+./target/debug/terminal-mirror-mac --session-id mac-live-session --passphrase batu-merah-kuda-terbang --relay-url ws://172.23.127.184:8888/ws --auth-token masmufid_super_secret_relay_2026 "$@"

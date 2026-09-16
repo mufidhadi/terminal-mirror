@@ -67,4 +67,7 @@ dependencies {
 
     // Google ML Kit Barcode Scanning
     implementation("com.google.mlkit:barcode-scanning:17.2.0")
+
+    // Unit Testing
+    testImplementation("junit:junit:4.13.2")
 }

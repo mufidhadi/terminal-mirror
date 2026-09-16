@@ -31,6 +31,7 @@ import com.mufid.terminalmirror.network.ConnectionManager
 import com.mufid.terminalmirror.network.DecodedPayload
 import com.mufid.terminalmirror.network.ProtocolCodec
 import com.mufid.terminalmirror.service.TerminalMirrorService
+import com.mufid.terminalmirror.terminal.TerminalBufferProcessor
 import com.mufid.terminalmirror.ui.components.AccessoryBar
 import com.mufid.terminalmirror.ui.components.QrScannerDialog
 import com.mufid.terminalmirror.ui.components.StatusHeader
@@ -117,10 +118,8 @@ fun TerminalMirrorApp(
             onSessionPayload = { sessionId, bytes ->
                 val decoded = codec.value.decodePacket(bytes)
                 if (decoded is DecodedPayload.TerminalOutput) {
-                    val cleanText = stripAnsiCodes(decoded.text)
                     val current = terminalBuffers.getOrDefault(sessionId, "")
-                    // Cap buffer at last 10,000 characters to prevent memory bloat
-                    val updated = (current + cleanText).takeLast(10000)
+                    val updated = TerminalBufferProcessor.processChunk(current, decoded.text)
                     terminalBuffers[sessionId] = updated
                 }
             },
@@ -336,10 +335,5 @@ private fun buildInitialBanner(session: TerminalSession?, isReadOnly: Boolean): 
  * Strips standard ANSI / VT100 control sequences for clean rendering in Compose Text.
  */
 private fun stripAnsiCodes(input: String): String {
-    return input
-        .replace(Regex("\u001B\\[[;?0-9]*[a-zA-Z]"), "")
-        .replace(Regex("\u001B\\([a-zA-Z]"), "")
-        .replace(Regex("\u001B\\][0-9];[^\u0007]*\u0007"), "")
-        .replace("\r\n", "\n")
-        .replace("\r", "\n")
+    return TerminalBufferProcessor.stripAnsiCodes(input)
 }
