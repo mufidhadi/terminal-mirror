@@ -9,7 +9,7 @@
 - **Nama Tugas**: Android Client App Architecture, Termux SurfaceView Integration, and Hardware Keystore Spec
 - **Nama Branch**: `feature/architecture-spec-and-submodules`
 - **Nama & URL Repo**: `terminal-mirror` (`https://github.com/mufidhadi/terminal-mirror`)
-- **Nomor Hash Commit**: `2026e70`
+- **Nomor Hash Commit**: `9c9ec96`
 - **Tech Stack**:
   - Language: Kotlin 1.9+ / Java 17
   - UI Toolkit: Jetpack Compose (BOM 2024.05.00), Material 3
