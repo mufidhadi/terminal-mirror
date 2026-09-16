@@ -5,6 +5,14 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 
+[lib]
+name = "terminal_mirror_relay"
+path = "src/lib.rs"
+
+[[bin]]
+name = "terminal-mirror-relay"
+path = "src/main.rs"
+
 [dependencies]
 terminal-mirror-protocol = { path = "../../crates/protocol" }
 tokio.workspace = true
@@ -20,3 +28,6 @@ tower-http = { version = "0.5", features = ["cors", "trace"] }
 dashmap = "5.5"
 clap = { version = "4.5", features = ["derive", "env"] }
 dotenvy = "0.15"
+
+[dev-dependencies]
+tokio-tungstenite = { version = "0.23", features = ["native-tls"] }

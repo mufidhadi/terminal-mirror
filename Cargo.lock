@@ -1293,6 +1293,7 @@ dependencies = [
  "serde_json",
  "terminal-mirror-protocol",
  "tokio",
+ "tokio-tungstenite 0.23.1",
  "tower-http",
  "tracing",
  "tracing-subscriber",
