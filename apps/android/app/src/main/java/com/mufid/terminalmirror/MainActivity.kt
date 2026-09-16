@@ -7,21 +7,38 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.mufid.terminalmirror.crypto.E2eeManager
 import com.mufid.terminalmirror.model.OsType
 import com.mufid.terminalmirror.model.PairingPayload
 import com.mufid.terminalmirror.model.TerminalSession
+import com.mufid.terminalmirror.network.ConnectionManager
+import com.mufid.terminalmirror.network.DecodedPayload
+import com.mufid.terminalmirror.network.ProtocolCodec
 import com.mufid.terminalmirror.service.TerminalMirrorService
 import com.mufid.terminalmirror.ui.components.AccessoryBar
 import com.mufid.terminalmirror.ui.components.QrScannerDialog
 import com.mufid.terminalmirror.ui.components.StatusHeader
 import com.mufid.terminalmirror.ui.components.WorkstationTabs
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicLong
 
 class MainActivity : ComponentActivity() {
 
@@ -36,26 +53,8 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             TerminalMirrorApp(
-                onEmergencyKill = { session ->
-                    Toast.makeText(
-                        this,
-                        "EMERGENCY KILL DISPATCHED to ${session.hostName} (Ctrl+Shift+Q)",
-                        Toast.LENGTH_LONG
-                    ).show()
-                },
-                onSendKey = { session, key ->
-                    Toast.makeText(
-                        this,
-                        "Key '$key' dispatched to ${session.hostName}",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                },
-                onPairHost = { payload ->
-                    Toast.makeText(
-                        this,
-                        "Paired with ${payload.hostId} (${payload.sessionId})",
-                        Toast.LENGTH_LONG
-                    ).show()
+                onShowToast = { msg ->
+                    Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
                 }
             )
         }
@@ -64,32 +63,46 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun TerminalMirrorApp(
-    onEmergencyKill: (TerminalSession) -> Unit,
-    onSendKey: (TerminalSession, String) -> Unit,
-    onPairHost: (PairingPayload) -> Unit = {}
+    onShowToast: (String) -> Unit
 ) {
+    val coroutineScope = rememberCoroutineScope()
     var selectedTabIndex by remember { mutableIntStateOf(0) }
-    var isReadOnly by remember { mutableStateOf(true) }
+    var isReadOnly by remember { mutableStateOf(false) } // Default to interactive mode for AVD
     var showScannerDialog by remember { mutableStateOf(false) }
+    var commandInput by remember { mutableStateOf("") }
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    val sequenceCounter = remember { AtomicLong(1000) }
+
+    // Live terminal buffers keyed by sessionId
+    val terminalBuffers = remember { mutableStateMapOf<String, String>() }
+
+    // E2EE manager and protocol codec (defaults to standard passphrase)
+    val e2eeCipher = remember {
+        mutableStateOf(E2eeManager.fromSecret("batu-merah-kuda-terbang"))
+    }
+    val codec = remember {
+        derivedStateOf { ProtocolCodec(e2eeCipher.value) }
+    }
 
     val sessions = remember {
         mutableStateListOf(
             TerminalSession(
-                sessionId = "mac-primary",
+                sessionId = "mac-live-session",
                 hostId = "macbook-pro",
-                hostName = "MacBook Pro (zsh)",
+                hostName = "MacBook Pro (Darwin zsh)",
                 osType = OsType.MACOS,
                 shell = "/bin/zsh",
-                isConnected = true,
-                isReadOnly = true
+                isConnected = false,
+                isReadOnly = false
             ),
             TerminalSession(
-                sessionId = "win-primary",
+                sessionId = "win-live-session",
                 hostId = "thinkpad-x1",
                 hostName = "ThinkPad Win (pwsh)",
                 osType = OsType.WINDOWS,
                 shell = "powershell.exe",
-                isConnected = true,
+                isConnected = false,
                 isReadOnly = true
             )
         )
@@ -97,18 +110,74 @@ fun TerminalMirrorApp(
 
     val activeSession = sessions.getOrNull(selectedTabIndex)
 
+    // ConnectionManager instance
+    val connectionManager = remember {
+        ConnectionManager(
+            scope = coroutineScope,
+            onSessionPayload = { sessionId, bytes ->
+                val decoded = codec.value.decodePacket(bytes)
+                if (decoded is DecodedPayload.TerminalOutput) {
+                    val cleanText = stripAnsiCodes(decoded.text)
+                    val current = terminalBuffers.getOrDefault(sessionId, "")
+                    // Cap buffer at last 10,000 characters to prevent memory bloat
+                    val updated = (current + cleanText).takeLast(10000)
+                    terminalBuffers[sessionId] = updated
+                }
+            },
+            onSessionStatusChanged = { sessionId, isConnected ->
+                val idx = sessions.indexOfFirst { it.sessionId == sessionId }
+                if (idx >= 0) {
+                    sessions[idx] = sessions[idx].copy(isConnected = isConnected)
+                }
+            }
+        )
+    }
+
+    // Auto-connect to default live session on launch
+    LaunchedEffect(Unit) {
+        val defaultRelayUrl = "ws://172.23.127.184:8888/ws?token=masmufid_super_secret_relay_2026&session_id=mac-live-session&role=client"
+        connectionManager.connectSession("mac-live-session", defaultRelayUrl)
+    }
+
+    // Helper to send keystroke upstream
+    val sendKeystroke: (String) -> Unit = { rawString ->
+        if (activeSession != null) {
+            val bytes = when (rawString) {
+                "ENTER", "\r", "\n" -> "\r".toByteArray(Charsets.UTF_8)
+                "TAB", "\t" -> "\t".toByteArray(Charsets.UTF_8)
+                "ESC" -> "\u001b".toByteArray(Charsets.UTF_8)
+                "CTRL+C" -> byteArrayOf(0x03)
+                "CTRL+D" -> byteArrayOf(0x04)
+                "CTRL+Z" -> byteArrayOf(0x1A)
+                "UP" -> "\u001b[A".toByteArray(Charsets.UTF_8)
+                "DOWN" -> "\u001b[B".toByteArray(Charsets.UTF_8)
+                "LEFT" -> "\u001b[D".toByteArray(Charsets.UTF_8)
+                "RIGHT" -> "\u001b[C".toByteArray(Charsets.UTF_8)
+                else -> rawString.toByteArray(Charsets.UTF_8)
+            }
+            val seq = sequenceCounter.incrementAndGet()
+            val packet = codec.value.encodeKeystroke(activeSession.sessionId, seq, bytes)
+            connectionManager.sendToSession(activeSession.sessionId, packet)
+        }
+    }
+
     if (showScannerDialog) {
         QrScannerDialog(
             onDismiss = { showScannerDialog = false },
             onPayloadScanned = { payload ->
                 showScannerDialog = false
+                val secret = payload.getFormattedPassphrase() ?: payload.preSharedKey
+                if (secret.isNotBlank()) {
+                    e2eeCipher.value = E2eeManager.fromSecret(secret)
+                }
+
                 val newSession = TerminalSession(
                     sessionId = payload.sessionId,
                     hostId = payload.hostId,
                     hostName = "${payload.hostId} (paired)",
                     osType = if (payload.hostId.contains("win", ignoreCase = true)) OsType.WINDOWS else OsType.MACOS,
                     shell = "remote-pty",
-                    isConnected = true,
+                    isConnected = false,
                     isReadOnly = false
                 )
                 val existingIndex = sessions.indexOfFirst { it.sessionId == payload.sessionId }
@@ -119,7 +188,11 @@ fun TerminalMirrorApp(
                     sessions.add(newSession)
                     selectedTabIndex = sessions.size - 1
                 }
-                onPairHost(payload)
+
+                val separator = if (payload.relayUrl.contains('?')) "&" else "?"
+                val fullUrl = "${payload.relayUrl}${separator}token=${payload.preSharedKey}&session_id=${payload.sessionId}&role=client"
+                connectionManager.connectSession(payload.sessionId, fullUrl)
+                onShowToast("Paired with ${payload.hostId} (${payload.sessionId})")
             }
         )
     }
@@ -147,54 +220,119 @@ fun TerminalMirrorApp(
                 onTabSelected = { selectedTabIndex = it }
             )
 
-            // Hardware Terminal SurfaceView viewport area
+            // Terminal Viewport Area
+            val scrollState = rememberScrollState()
+            LaunchedEffect(terminalBuffers[activeSession?.sessionId]) {
+                scrollState.scrollTo(scrollState.maxValue)
+            }
+
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
                     .padding(6.dp)
-                    .background(Color(0xFF000000))
+                    .background(Color(0xFF0D1117))
+                    .verticalScroll(scrollState)
             ) {
-                if (activeSession != null) {
-                    Text(
-                        text = buildTerminalPreview(activeSession, isReadOnly),
-                        color = Color(0xFF00FF66),
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(10.dp)
-                    )
+                val currentText = activeSession?.let { terminalBuffers[it.sessionId] } ?: ""
+                val displayText = if (currentText.isBlank()) {
+                    buildInitialBanner(activeSession, isReadOnly)
+                } else {
+                    currentText
                 }
+
+                Text(
+                    text = displayText,
+                    color = Color(0xFF58A6FF),
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
+                    modifier = Modifier.padding(10.dp)
+                )
             }
 
-            // Programmer Keyboard Accessory Bar (Visible only when unlocked)
+            // Quick Command Input Field
             if (!isReadOnly && activeSession != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextField(
+                        value = commandInput,
+                        onValueChange = { commandInput = it },
+                        placeholder = { Text("Type command (e.g. ls -la, uname -a)", fontSize = 12.sp) },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color(0xFF1F242C),
+                            unfocusedContainerColor = Color(0xFF1F242C),
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                        keyboardActions = KeyboardActions(onSend = {
+                            if (commandInput.isNotBlank()) {
+                                sendKeystroke("$commandInput\r")
+                                commandInput = ""
+                                keyboardController?.hide()
+                            }
+                        })
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    IconButton(
+                        onClick = {
+                            if (commandInput.isNotBlank()) {
+                                sendKeystroke("$commandInput\r")
+                                commandInput = ""
+                                keyboardController?.hide()
+                            }
+                        },
+                        colors = IconButtonDefaults.iconButtonColors(containerColor = Color(0xFF238636))
+                    ) {
+                        Icon(Icons.Default.Send, contentDescription = "Send", tint = Color.White)
+                    }
+                }
+
+                // Programmer Keyboard Accessory Bar
                 AccessoryBar(
-                    onKeyPress = { key -> onSendKey(activeSession, key) },
-                    onEmergencyKill = { onEmergencyKill(activeSession) }
+                    onKeyPress = { key -> sendKeystroke(key) },
+                    onEmergencyKill = {
+                        sendKeystroke("CTRL+C")
+                        onShowToast("Emergency Kill dispatched (Ctrl+C)")
+                    }
                 )
             }
         }
     }
 }
 
-private fun buildTerminalPreview(session: TerminalSession, isReadOnly: Boolean): String {
-    val lockState = if (isReadOnly) "LOCKED (Read-Only Safety Guard)" else "UNLOCKED (Interactive Keystrokes Active)"
+private fun buildInitialBanner(session: TerminalSession?, isReadOnly: Boolean): String {
+    val statusText = if (session?.isConnected == true) "CONNECTED (Realtime Stream Active)" else "CONNECTING to VPS Relay (172.23.127.184:8888)..."
+    val lockText = if (isReadOnly) "LOCKED (Read-Only Mode)" else "UNLOCKED (Interactive Remote Keystrokes Active)"
     return """
         ┌────────────────────────────────────────────────────────┐
-        │  Terminal Mirror - Mobile Viewer (Termux Engine)       │
-        │  Target Host : ${session.hostName.padEnd(41)}│
-        │  Session ID  : ${session.sessionId.padEnd(41)}│
-        │  Shell Type  : ${session.shell.padEnd(41)}│
-        │  Status Mode : ${lockState.padEnd(41)}│
+        │  Terminal Mirror - Android Client (API 35)             │
+        │  Target Host  : ${session?.hostName?.padEnd(39)}│
+        │  Session ID   : ${session?.sessionId?.padEnd(39)}│
+        │  Relay VPS    : 172.23.127.184:8888                    │
+        │  Status       : ${statusText.padEnd(39)}│
+        │  Mode         : ${lockText.padEnd(39)}│
         └────────────────────────────────────────────────────────┘
         
-        $ git status
-        On branch feature/architecture-spec-and-submodules
-        Your branch is up to date with 'origin/feature/architecture-spec-and-submodules'.
-        
-        $ cargo test --workspace
-        test result: ok. 15 passed; 0 failed; 0 ignored; finished in 0.35s
-        
-        $ _
+        Waiting for Darwin PTY shell frames...
     """.trimIndent()
+}
+
+/**
+ * Strips standard ANSI / VT100 control sequences for clean rendering in Compose Text.
+ */
+private fun stripAnsiCodes(input: String): String {
+    return input
+        .replace(Regex("\u001B\\[[;?0-9]*[a-zA-Z]"), "")
+        .replace(Regex("\u001B\\([a-zA-Z]"), "")
+        .replace(Regex("\u001B\\][0-9];[^\u0007]*\u0007"), "")
+        .replace("\r\n", "\n")
+        .replace("\r", "\n")
 }

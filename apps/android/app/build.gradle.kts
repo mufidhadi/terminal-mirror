@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace = "com.mufid.terminalmirror"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.mufid.terminalmirror"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
 
@@ -47,9 +47,6 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
-
-    // Termux Terminal View component via JitPack
-    implementation("com.github.termux:terminal-view:v0.118.0")
 
     // OkHttp & WebSocket
     implementation("com.squareup.okhttp3:okhttp:4.12.0")

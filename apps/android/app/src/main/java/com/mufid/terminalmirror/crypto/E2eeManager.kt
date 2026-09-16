@@ -41,13 +41,28 @@ class E2eeManager(private val secretKey: SecretKeySpec) {
             System.arraycopy(buffer.array(), 0, nonce, 4, 8)
             return nonce
         }
+        fun getCipher(): Cipher {
+            val algorithms = listOf(
+                "ChaCha20/Poly1305/NoPadding",
+                "ChaCha20-Poly1305/None/NoPadding",
+                "ChaCha20-Poly1305",
+                "ChaCha20"
+            )
+            for (algo in algorithms) {
+                try {
+                    return Cipher.getInstance(algo)
+                } catch (ignored: Exception) {
+                }
+            }
+            throw IllegalStateException("No ChaCha20-Poly1305 provider available on this Android device")
+        }
     }
 
     /**
      * Encrypts plaintext bytes using ChaCha20-Poly1305 with sequence-derived nonce.
      */
     fun encrypt(seq: Long, plaintext: ByteArray): ByteArray {
-        val cipher = Cipher.getInstance(CIPHER_ALGO)
+        val cipher = getCipher()
         val ivSpec = IvParameterSpec(deriveNonce(seq))
         cipher.init(Cipher.ENCRYPT_MODE, secretKey, ivSpec)
         return cipher.doFinal(plaintext)
@@ -58,7 +73,7 @@ class E2eeManager(private val secretKey: SecretKeySpec) {
      * Throws AEADBadTagException if ciphertext has been tampered with.
      */
     fun decrypt(seq: Long, ciphertext: ByteArray): ByteArray {
-        val cipher = Cipher.getInstance(CIPHER_ALGO)
+        val cipher = getCipher()
         val ivSpec = IvParameterSpec(deriveNonce(seq))
         cipher.init(Cipher.DECRYPT_MODE, secretKey, ivSpec)
         return cipher.doFinal(ciphertext)
