@@ -1,23 +1,26 @@
 # Terminal Mirror
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.97%2B-orange.svg)](https://www.rust-lang.org)
 [![Android](https://img.shields.io/badge/Android-14%2B-brightgreen.svg)](https://developer.android.com)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-> **Real-time, End-to-End Encrypted Terminal Mirroring across macOS, Windows, and Android via Private Relay.**
+> **The Open-Source, End-to-End Encrypted Terminal Streaming & Multiplexing Platform.**  
+> *Seamlessly mirror and interact with terminal sessions from macOS & Windows workstations on Android with sub-50ms latency.*
 
 ---
 
-## 🚀 Overview
+## 🚀 Why Terminal Mirror?
 
-**Terminal Mirror** is an ultra-low-latency terminal streaming and multiplexing platform. It empowers developers to monitor and interact with active CLI sessions running on multiple workstations (macOS and Windows) directly from an Android mobile device in real time.
+Most remote terminal tools either force you to open insecure firewall ports for inbound SSH, suffer from high-latency graphical screen streaming (VNC/RDP), or route unencrypted plaintext through public servers (like public `tmate`).
 
-Built from the ground up for high performance, modularity, and zero-knowledge data privacy:
-- **Cross-Platform Host Daemons**: Native Unix PTY (`/dev/ptmx`) on macOS and ConPTY on Windows via Rust's `portable-pty`.
-- **Zero-Knowledge VPS Relay**: The relay router is blind to terminal data; payloads are end-to-end encrypted (E2EE) with ChaCha20-Poly1305.
-- **ZeroTier / Private Mesh Integration**: Can be bound strictly to private network interfaces (`10.x.x.x`), eliminating public internet attack surfaces.
-- **Mobile Multi-Session Tabs**: Monitor a build on Mac and a test suite on Windows side-by-side or tab-switched on your phone.
-- **Safe Mobile Guard**: Default **View-Only Mode** prevents accidental keystrokes from pocket touches.
+**Terminal Mirror** is built like **RustDesk for Terminals**:
+* 🔒 **Zero-Knowledge E2EE**: Terminal streams are encrypted client-to-client using **ChaCha20-Poly1305** and **X25519**. The relay server (community or private) is mathematically blind and can never read your keystrokes, passwords, or output.
+* 🖥️ **Virtual Screen Grid Engine**: Integrates an in-memory `vt100` state grid. Reconnecting after cellular network drops restores a crystal-clear screen without garbled text or corrupted `nvim`/`htop` buffers.
+* 🤝 **Zero-Friction Pairing ("Known Hosts")**: Pair once via QR code or 6-digit short PIN. Subsequent daily reconnections are instant 1-tap connects saved in your Android KeyStore.
+* 👥 **Dual-Role Collaboration**: Share your session as **Interactive Admin** (for personal control) or **Read-Only Spectator** (for pair programming and demonstrations).
+* 🛡️ **Fail-Safe View-Only Guard**: Default read-only lock on mobile prevents accidental keystrokes from pocket touches.
+* ⚡ **Host Emergency Kill Switch**: Press `Ctrl + Shift + Q` on your laptop to revoke all remote viewers instantly.
 
 ---
 
@@ -26,20 +29,21 @@ Built from the ground up for high performance, modularity, and zero-knowledge da
 ```
 ┌─────────────────────────┐          ┌─────────────────────────┐
 │     macOS Workstation   │          │   Windows Workstation   │
-│   (portable-pty / zsh)  │          │  (ConPTY / powershell)  │
+│ (Unix PTY + vt100 Grid) │          │ (ConPTY + Debounced)    │
 └────────────┬────────────┘          └────────────┬────────────┘
              │ E2EE Stream                        │ E2EE Stream
              └─────────────────┬──────────────────┘
                                ▼
                 ┌───────────────────────────────┐
-                │     Private VPS Relay Hub     │
-                │     (Rust Tokio WebSocket)    │
+                │   Zero-Knowledge Relay Hub    │
+                │  (Public Community or Private)│
                 └──────────────┬────────────────┘
                                │ Multiplexed Streams
                                ▼
                 ┌───────────────────────────────┐
                 │     Android Smartphone App    │
-                │     [Mac Tab]  [Windows Tab]  │
+                │  [Mac Tab]       [Windows Tab]│
+                │  [Known Hosts]   [Raw Key IME]│
                 └───────────────────────────────┘
 ```
 
@@ -50,71 +54,67 @@ Built from the ground up for high performance, modularity, and zero-knowledge da
 ```
 terminal-mirror/
 ├── apps/
-│   ├── mac/              # macOS Terminal Host Agent (Rust)
-│   ├── windows/          # Windows Terminal Host Agent (ConPTY Rust)
-│   └── android/          # Android Terminal Mirror Client (Kotlin & Compose)
+│   ├── mac/              # macOS Terminal Host Agent (Rust + POSIX PTY)
+│   ├── windows/          # Windows Terminal Host Agent (Rust + ConPTY Debouncer)
+│   └── android/          # Android Terminal Mirror Client (Kotlin, Compose, KeyStore)
 ├── crates/
 │   └── protocol/         # Shared wire protocol & MessagePack schemas (Rust)
 ├── services/
-│   └── relay-server/     # High-throughput VPS Relay Hub (Rust Tokio)
-├── docs/                 # Comprehensive Engineering Documentation
-│   ├── BRD.md            # Business Requirements Document
-│   ├── PRD.md            # Product Requirements Document
+│   └── relay-server/     # High-throughput Relay Hub (Rust Tokio)
+├── docs/                 # Complete Engineering Documentation Suite
+│   ├── BRD.md            # Business Requirements Document (Open-Source Edition)
+│   ├── PRD.md            # Product Requirements Document & User Personas
 │   ├── SRS.md            # Software Requirements Specification (IEEE 830)
-│   ├── PLANNING.md       # Project Planning, Milestones, Sprints & Risk Matrix
+│   ├── PLANNING.md       # Open-Source Roadmap, Sprints & Risk Matrix
 │   ├── ARCHITECTURE_DIAGRAM.md # System Architecture & Sequence Diagrams
 │   ├── DATA_DICTIONARY.md # Wire Protocol Data Dictionary & Schemas
-│   ├── SECURITY_DESIGN.md # Threat Model (STRIDE) & Cryptographic Architecture
+│   ├── SECURITY_DESIGN.md # Zero-Trust Security Architecture & Threat Model
 │   ├── HLD.md            # High-Level Design
 │   └── LLD.md            # Low-Level Design
-├── docker-compose.yml    # Relay Hub deployment on VPS
-├── .env.example          # Generic configuration template
-└── README.md
+├── CONTRIBUTING.md        # Open-source contributor guidelines
+├── LICENSE                # MIT License
+├── docker-compose.yml    # Self-hosted Relay Hub orchestration
+└── .env.example          # Generic environment template
 ```
-
----
-
-## 🔒 Security Best Practices
-
-Terminal sessions handle extremely sensitive data (passwords, API tokens, production keys). Terminal Mirror ensures maximum protection:
-1. **End-to-End Encryption (E2EE)**: Payloads are encrypted before leaving your laptop using **ChaCha20-Poly1305**. The VPS relay forwards opaque binary blobs without access to decryption keys.
-2. **Network Isolation**: Relay server can bind strictly to private overlay networks (e.g. ZeroTier/WireGuard) without opening public ports.
-3. **One-Tap QR Pairing**: Generates an ephemeral cryptographic pairing token displayed directly in your terminal.
-4. **Input Safety Lock**: Mobile app defaults to **View-Only**, requiring explicit unlock before accepting touch keyboard input.
 
 ---
 
 ## ⚡ Quick Start
 
-### 1. Build and Run Protocol & Host Agent (macOS / Windows)
+### 1. Build and Run Host Agent
 ```bash
-# Verify and run tests across workspace
+# Run tests across workspace
 cargo test
 
-# Run macOS Host Agent
+# Launch Host Agent on macOS
 cargo run -p terminal-mirror-mac
 
-# Run Windows Host Agent (on Windows)
+# Launch Host Agent on Windows (PowerShell / ConPTY)
 cargo run -p terminal-mirror-windows
 ```
 
-### 2. Run Relay Server (VPS / Docker)
+### 2. Self-Host Private Relay Hub (Optional)
 ```bash
 docker compose up -d --build
 ```
 
 ---
 
-## 📄 Documentation
-For detailed engineering specifications, refer to the [`/docs`](docs/) directory:
-- [Software Requirements Specification (SRS)](docs/SRS.md)
+## 📄 Engineering Documentation
+Explore the [`/docs`](docs/) directory for full specifications:
+- [Business Requirements Document (BRD)](docs/BRD.md)
 - [Product Requirements Document (PRD)](docs/PRD.md)
-- [System Architecture & Diagrams](docs/ARCHITECTURE_DIAGRAM.md)
+- [Software Requirements Specification (SRS)](docs/SRS.md)
+- [System Architecture & Sequence Diagrams](docs/ARCHITECTURE_DIAGRAM.md)
 - [Security Architecture & Threat Model](docs/SECURITY_DESIGN.md)
-- [Data Dictionary & Protocol Schemas](docs/DATA_DICTIONARY.md)
-- [Project Planning & Milestones](docs/PLANNING.md)
+- [Protocol Data Dictionary](docs/DATA_DICTIONARY.md)
+
+---
+
+## 🤝 Contributing
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) to get started.
 
 ---
 
 ## 📜 License
-MIT License. See [LICENSE](LICENSE) for details.
+Distributed under the MIT License. See [LICENSE](LICENSE) for more information.

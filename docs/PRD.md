@@ -1,60 +1,89 @@
 # Product Requirements Document (PRD)
-## Project: Terminal Mirror
-
-### 1. Product Vision & Overview
-Terminal Mirror is an ultra-fast, secure, developer-first terminal streaming tool. It replicates active CLI sessions from any developer workstation (macOS and Windows) to an Android smartphone with native mobile terminal emulation, zero cloud vendor lock-in, and military-grade end-to-end encryption.
+## Project: Terminal Mirror (Open-Source Edition)
 
 ---
 
-### 2. Target Personas
-* **Persona: Mufid (Senior Full-Stack & Infrastructure Engineer)**
-  * *Pain Point*: Starts heavy Docker builds, data migrations, or AI model training on MacBook Pro and Windows ThinkPad; needs to step away from his desk without missing logs or interrupting progress.
-  * *Needs*: Quick glance on phone, parallel tabs for Mac and Windows, assurance that passwords typed on Mac are not visible to anyone on the VPS, and protection against accidental touch screen inputs.
+### 1. Product Vision
+Terminal Mirror is a universal, open-source terminal streaming utility that allows developers to securely mirror, monitor, and interact with desktop terminal sessions from their mobile devices with zero configuration, zero cloud privacy compromise, and native mobile UX.
+
+---
+
+### 2. User Personas
+
+#### Persona 1: Alex (The Open-Source Developer)
+* **Environment**: MacBook Pro running macOS + Android Pixel.
+* **Scenario**: Compiling Chromium, running long Rust test suites, or training local ML models.
+* **Goal**: Needs to monitor terminal progress while walking the dog or grabbing coffee, without carrying a laptop.
+* **Frustration with existing tools**: SSH requires opening ports on home Wi-Fi; AnyDesk/VNC burns phone battery and wastes mobile data bandwidth.
+
+#### Persona 2: Sarah (The Open-Source Mentor / Pair Programmer)
+* **Environment**: Windows 11 workstation.
+* **Scenario**: Mentoring junior contributors or demoing CLI tools in a workshop.
+* **Goal**: Wants to share a live terminal stream with attendees in **Read-Only Spectator Mode** using a simple PIN or link without risking accidental or malicious keystrokes.
+
+#### Persona 3: Mufid (The Senior Cloud Infrastructure Lead)
+* **Environment**: Dual workstations (MacBook Pro + ThinkPad Windows), private VPS relay.
+* **Scenario**: Managing production Kubernetes migrations and database scripts.
+* **Goal**: Parallel dual-screen monitoring (Mac & Windows simultaneously), Zero-Knowledge E2EE, self-hosted relay on private mesh network (ZeroTier).
 
 ---
 
 ### 3. User Journeys
 
-#### Journey 1: Host Initialization & Pairing
-1. User opens terminal on Mac: runs `terminal-mirror host --name "MacBook Pro"`.
-2. Host spawns a new shell inside a PTY, generates an ephemeral cryptographic keypair, connects out-of-band to the Relay Hub, and renders an ASCII QR Code in the terminal.
-3. User opens the Android App, taps "Scan Host QR", points camera at laptop screen.
-4. App parses pairing envelope, performs mutual cryptographic handshake, and saves host descriptor.
-5. Terminal Mirror screen opens instantly with active shell output.
+#### Journey 1: First-Contact Pairing (Frictionless Onboarding)
+1. User installs CLI tool: `brew install terminal-mirror` (or `cargo install terminal-mirror`).
+2. User runs `terminal-mirror` in their shell.
+3. Host outputs connection credentials in two friendly formats:
+   * **Visual Mode**: Compact ASCII QR Code.
+   * **Headless / Remote Mode**: **9-Digit Device ID + 6-Digit PIN** (e.g. `ID: 839-201-940 | PIN: 491-023`).
+4. User opens Android App, either scans the QR code OR types the 6-digit PIN.
+5. Devices execute an ephemeral cryptographic handshake, exchange public keys, and establish an encrypted session.
 
-#### Journey 2: Dual Parallel Monitoring (Mac + Windows)
-1. User repeats the host command on Windows ThinkPad.
-2. Android App displays a notification: "New session detected: Windows ThinkPad".
-3. A new tab appears in the Android top bar: `[MacBook Pro (zsh)]` and `[ThinkPad (pwsh)]`.
-4. User can switch between tabs instantly or view both side-by-side in landscape split mode.
-5. Output streams continuously in the background without dropping buffer frames.
+#### Journey 2: Zero-Friction Everyday Reconnection ("Known Hosts")
+1. After the initial pairing, the Android App securely stores the host's identity in the **Android KeyStore** (e.g. `"Work MacBook Pro"`).
+2. The laptop host adds the mobile device's public key to `~/.config/terminal-mirror/authorized_devices.toml`.
+3. The next day, the user opens the Android App and simply taps **`[Connect: Work MacBook Pro]`**.
+4. The connection is established instantly via authenticated cryptographic token. **No QR scan or PIN entry is needed.**
 
-#### Journey 3: Safe Interactive Input
-1. By default, the session is in **Read-Only / Lock Mode** (green lock icon). Tapping on the screen scrolls the buffer but sends no keystrokes.
-2. User taps the lock icon to enter **Interactive Mode** (amber unlock icon).
-3. The accessory terminal keyboard bar slides up containing `ESC`, `TAB`, `CTRL`, `ALT`, and Arrow Keys.
-4. User taps `CTRL` + `C` to terminate a runaway build script on the Mac laptop.
-5. User locks input again to prevent accidental pocket typing.
+#### Journey 3: Seamless Network Roaming & Reconnect
+1. User is running `htop` or editing a file in `nvim` on their laptop.
+2. User leaves home Wi-Fi; mobile connection transitions to 4G cellular (socket temporarily drops).
+3. The Android App automatically initiates reconnect with exponential backoff.
+4. Upon reconnect, the Host Agent does NOT replay 1 MB of historical ANSI garbage; instead, it sends a **`ScreenStateSync` snapshot** generated by its internal `vt100` virtual grid.
+5. The Android screen renders the exact, clean, current state of `htop`/`nvim` with zero garbled characters or misplaced cursors.
 
----
+#### Journey 4: Spectator Sharing (Read-Only Mode)
+1. Host runs `terminal-mirror share --read-only`.
+2. Host generates a Spectator PIN / Link.
+3. Colleague or viewer connects; their client is granted `SessionRole::Spectator`.
+4. Keystroke inputs from this client are strictly discarded by both mobile UI and host daemon.
 
-### 4. Detailed Feature Breakdown
-
-| Feature ID | Feature Name | Priority | User Story | Technical Implementation |
-| :--- | :--- | :--- | :--- | :--- |
-| **FEAT-01** | Cross-Platform PTY Daemon | P0 | As a developer, I want to mirror my interactive terminal on Mac and Windows without changing my shell. | Rust binary leveraging `portable-pty` for Unix POSIX PTY and Windows ConPTY. |
-| **FEAT-02** | Zero-Knowledge Relay Hub | P0 | As a security-conscious engineer, I want the relay server to be blind to my terminal data. | Tokio async relay forwarding opaque encrypted binary MessagePack packets. |
-| **FEAT-03** | Parallel Multi-Session Tabs | P0 | As a developer, I want to monitor both my Mac and Windows workstations concurrently on my phone. | Jetpack Compose / Flutter multi-tab container with independent terminal instances. |
-| **FEAT-04** | QR Code Instant Pairing | P1 | As a mobile user, I want to connect my phone without typing IP addresses or complex tokens. | `qrcode` crate on host CLI; ZXing/CameraX scanner on Android. |
-| **FEAT-05** | View-Only Safety Lock | P0 | As a mobile user, I want to prevent accidental touches from executing commands on my computer. | Client-side input filter intercepting touch and soft keyboard events. |
-| **FEAT-06** | Scrollback Ring Buffer | P1 | As a mobile user, I want to see the last 1,000 lines of terminal history when reconnecting after signal loss. | Host-side FIFO ring buffer caching raw ANSI byte streams. |
-| **FEAT-07** | Accessory Terminal Keyboard | P1 | As a mobile user, I need essential keys (`Ctrl`, `Alt`, `Esc`, `Tab`, arrows) missing on phone keyboards. | Floating sticky toolbar on top of standard Android IME. |
-| **FEAT-08** | Dynamic Terminal Resizing | P2 | As a mobile user, I want the host terminal to adapt when I rotate my phone to landscape. | Bidirectional `TerminalResize` packet with `PtySize` updates on host. |
+#### Journey 5: Emergency Host Kill Switch
+1. Host engineer notices unintended activity or wishes to immediately terminate remote access.
+2. User presses `Ctrl + Shift + Q` on their physical laptop keyboard.
+3. Host daemon immediately drops all remote subscriber sockets and emits `SessionRevoked`.
 
 ---
 
-### 5. Success Metrics & Key Performance Indicators (KPIs)
-* **Keystroke Echo Latency**: < 50 ms over Wi-Fi, < 100 ms over 4G/5G cellular.
-* **Stream Bandwidth**: < 20 KB/sec during continuous scroll output (via MessagePack binary framing).
-* **Connection Re-establishment**: < 1.5 seconds when transitioning between Wi-Fi and Cellular.
-* **Crash-Free Sessions**: 99.9% uptime for the host daemon and relay hub over 30-day continuous runs.
+### 4. Feature Matrix (P0 / P1 / P2)
+
+| Feature ID | Feature Name | Priority | Open-Source Value Proposition |
+| :--- | :--- | :--- | :--- |
+| **FEAT-01** | Cross-Platform PTY Engine | P0 | Unified Rust daemon supporting POSIX Unix PTY (macOS/Linux) and Windows ConPTY. |
+| **FEAT-02** | Zero-Knowledge E2EE | P0 | ChaCha20-Poly1305 + X25519 ensures zero plaintext visibility, even on free public community relays. |
+| **FEAT-03** | Virtual Screen Grid Sync | P0 | In-memory `vt100` parser on host guarantees 100% clean screen state on reconnect. |
+| **FEAT-04** | Persistent "Known Hosts" Pairing | P0 | One-time pairing (QR or PIN) -> 1-tap daily reconnect without QR scan fatigue. |
+| **FEAT-05** | Hybrid Relay Support | P0 | Works out-of-the-box with community relay OR with 1-click self-hosted Docker Hub. |
+| **FEAT-06** | Dual-Role Access Control | P1 | Granular tokens: `Admin` (interactive) vs `Spectator` (read-only sharing). |
+| **FEAT-07** | ConPTY Debounced Resizing | P1 | 200ms debounce prevents frame storms and CPU spiking on Windows hosts. |
+| **FEAT-08** | Mobile Input Isolation & KeyBar| P1 | `TYPE_NULL` input filter prevents Gboard composition bugs; sticky `Ctrl`/`Alt` bar. |
+| **FEAT-09** | Emergency Host Kill Switch | P1 | Physical keyboard hotkey (`Ctrl+Shift+Q`) for instant remote revocation. |
+| **FEAT-10** | Headless PIN Pairing | P2 | 6-digit short OTP for pairing headless cloud servers without GUI monitors. |
+
+---
+
+### 5. Success Metrics (KPIs)
+* **First-Time Setup Time**: < 15 seconds from download to active terminal mirror.
+* **Daily Reconnection Time**: < 1.0 second with 1-tap Known Hosts.
+* **TUI State Integrity**: 0 visual artifacts or terminal crashes when switching between Wi-Fi and 4G/5G.
+* **Resource Footprint**: < 25 MB RAM and < 1% CPU on idle host daemons.

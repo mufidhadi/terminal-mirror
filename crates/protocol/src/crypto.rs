@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-/// Pairing configuration exchanged out-of-band (e.g. via QR code)
+/// Pairing configuration exchanged out-of-band (via QR code or 6-digit PIN)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PairingPayload {
     pub relay_url: String,
@@ -8,6 +8,7 @@ pub struct PairingPayload {
     pub host_id: String,
     pub pre_shared_key: String,
     pub public_key: String,
+    pub pin_code: Option<String>,
     pub expires_at_ms: u64,
 }
 
@@ -19,4 +20,14 @@ impl PairingPayload {
     pub fn from_qr_string(s: &str) -> Result<Self, serde_json::Error> {
         serde_json::from_str(s)
     }
+}
+
+/// Known trusted device saved in local storage (eliminates QR scan fatigue)
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TrustedDevice {
+    pub device_id: String,
+    pub friendly_name: String,
+    pub public_key: String,
+    pub last_relay_url: String,
+    pub paired_at_ms: u64,
 }

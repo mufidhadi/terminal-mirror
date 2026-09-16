@@ -3,6 +3,15 @@ use serde::{Deserialize, Serialize};
 /// Wire protocol version
 pub const PROTOCOL_VERSION: u16 = 1;
 
+/// Access role granted to a connected client
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum SessionRole {
+    /// Full interactive write access (keystrokes + resize)
+    Admin,
+    /// Read-only spectator access (cannot emit keystrokes or resize)
+    Spectator,
+}
+
 /// Top-level wire message envelope
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Packet {
@@ -40,6 +49,17 @@ impl Packet {
     }
 }
 
+/// Visual snapshot of terminal screen grid (prevents garbled text upon reconnect)
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ScreenSnapshot {
+    pub cols: u16,
+    pub rows: u16,
+    pub cursor_x: u16,
+    pub cursor_y: u16,
+    pub in_alternate_screen: bool,
+    pub lines: Vec<String>,
+}
+
 /// Enumeration of all protocol payload variants
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "type", content = "data")]
@@ -50,33 +70,41 @@ pub enum PacketPayload {
         os_type: OsType,
         hostname: String,
         token: String,
+        public_key: Option<String>,
     },
     /// Host registration confirmation
     HostRegistered {
         success: bool,
         message: String,
+        device_id: String,
     },
     /// Client subscription to a terminal session
     SubscribeSession {
         client_id: String,
         session_id: String,
         auth_token: String,
+        requested_role: SessionRole,
     },
-    /// Subscription confirmation
+    /// Subscription confirmation with assigned role
     SessionSubscribed {
         session_id: String,
         success: bool,
+        assigned_role: SessionRole,
         message: String,
     },
     /// Raw terminal input (keystrokes, commands) sent to PTY
     TerminalInput {
         bytes: Vec<u8>,
     },
-    /// Raw terminal output (ANSI/VT100 stream) from PTY
+    /// Raw terminal output (ANSI/VT100 delta stream) from PTY
     TerminalOutput {
         bytes: Vec<u8>,
     },
-    /// Terminal dimension change
+    /// Complete visual state snapshot sent upon client reconnect
+    ScreenStateSync {
+        snapshot: ScreenSnapshot,
+    },
+    /// Terminal dimension change (debounced)
     TerminalResize {
         cols: u16,
         rows: u16,
@@ -85,6 +113,22 @@ pub enum PacketPayload {
     EncryptedBlob {
         nonce: u64,
         ciphertext: Vec<u8>,
+    },
+    /// Pairing request using 6-digit short PIN
+    PairWithPin {
+        pin: String,
+        client_public_key: String,
+    },
+    /// Pairing response confirming persistent association
+    PairingConfirmed {
+        success: bool,
+        host_name: String,
+        host_public_key: String,
+        auth_token: String,
+    },
+    /// Host-initiated emergency kill switch (instant revocation)
+    SessionRevoked {
+        reason: String,
     },
     /// Heartbeat ping
     Ping {

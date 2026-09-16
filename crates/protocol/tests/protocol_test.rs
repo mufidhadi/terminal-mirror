@@ -1,5 +1,6 @@
 use terminal_mirror_protocol::{
-    OsType, Packet, PacketPayload, PairingPayload, SessionDescriptor, SessionStatus, PROTOCOL_VERSION,
+    Packet, PacketPayload, PairingPayload, ScreenSnapshot, SessionRole, TrustedDevice,
+    PROTOCOL_VERSION,
 };
 
 #[test]
@@ -16,7 +17,6 @@ fn test_packet_creation_and_version() {
 
 #[test]
 fn test_packet_msgpack_roundtrip_terminal_output() {
-    // Simulating ANSI colored terminal stream
     let raw_terminal_bytes = b"\x1b[32muser@host:~$ \x1b[0mls -la\r\ntotal 12\r\n".to_vec();
     let payload = PacketPayload::TerminalOutput {
         bytes: raw_terminal_bytes.clone(),
@@ -38,55 +38,81 @@ fn test_packet_msgpack_roundtrip_terminal_output() {
 }
 
 #[test]
-fn test_packet_msgpack_roundtrip_resize() {
-    let payload = PacketPayload::TerminalResize { cols: 120, rows: 45 };
-    let packet = Packet::new("win-session-002", 2, payload);
+fn test_screen_snapshot_roundtrip() {
+    let snapshot = ScreenSnapshot {
+        cols: 80,
+        rows: 24,
+        cursor_x: 10,
+        cursor_y: 5,
+        in_alternate_screen: true,
+        lines: vec![
+            "top - 12:00:00 up 10 days".to_string(),
+            "Tasks: 350 total, 1 running".to_string(),
+        ],
+    };
 
-    let encoded = packet.to_msgpack().expect("Failed to encode resize packet");
-    let decoded = Packet::from_msgpack(&encoded).expect("Failed to decode resize packet");
+    let payload = PacketPayload::ScreenStateSync {
+        snapshot: snapshot.clone(),
+    };
+    let packet = Packet::new("sess-tui-01", 1, payload);
 
-    if let PacketPayload::TerminalResize { cols, rows } = decoded.payload {
-        assert_eq!(cols, 120);
-        assert_eq!(rows, 45);
+    let encoded = packet.to_msgpack().expect("Failed to encode snapshot packet");
+    let decoded = Packet::from_msgpack(&encoded).expect("Failed to decode snapshot packet");
+
+    if let PacketPayload::ScreenStateSync { snapshot: decoded_snap } = decoded.payload {
+        assert_eq!(decoded_snap.cols, 80);
+        assert_eq!(decoded_snap.rows, 24);
+        assert!(decoded_snap.in_alternate_screen);
+        assert_eq!(decoded_snap.lines.len(), 2);
     } else {
         panic!("Decoded payload variant mismatch!");
     }
 }
 
 #[test]
-fn test_pairing_payload_qr_serialization() {
+fn test_pairing_payload_with_pin_and_trusted_device() {
     let pairing = PairingPayload {
         relay_url: "wss://relay.example.internal:8443/ws".to_string(),
         session_id: "mac-term-alpha".to_string(),
         host_id: "macbook-pro".to_string(),
         pre_shared_key: "k3y_pr3_sh4r3d_s3cur3".to_string(),
         public_key: "pub_k3y_x25519_3x4mpl3".to_string(),
+        pin_code: Some("849201".to_string()),
         expires_at_ms: 1726530000000,
     };
 
     let qr_string = pairing.to_qr_string().expect("Failed to convert to QR string");
-    assert!(qr_string.contains("mac-term-alpha"));
+    assert!(qr_string.contains("849201"));
 
     let parsed = PairingPayload::from_qr_string(&qr_string).expect("Failed to parse from QR string");
     assert_eq!(parsed, pairing);
+
+    let trusted = TrustedDevice {
+        device_id: "macbook-pro-uuid".to_string(),
+        friendly_name: "MacBook Pro M1".to_string(),
+        public_key: "pub_k3y_x25519_3x4mpl3".to_string(),
+        last_relay_url: "wss://relay.example.internal:8443/ws".to_string(),
+        paired_at_ms: 1726530000000,
+    };
+    assert_eq!(trusted.friendly_name, "MacBook Pro M1");
 }
 
 #[test]
-fn test_session_descriptor_initialization() {
-    let session = SessionDescriptor::new(
-        "sess-123",
-        "mac-laptop",
-        "Mufid-MacBook.local",
-        OsType::MacOS,
-        "/bin/zsh",
-        80,
-        24,
-    );
+fn test_session_role_subscription() {
+    let payload = PacketPayload::SubscribeSession {
+        client_id: "phone-client-1".to_string(),
+        session_id: "mac-sess".to_string(),
+        auth_token: "token123".to_string(),
+        requested_role: SessionRole::Spectator,
+    };
 
-    assert_eq!(session.session_id, "sess-123");
-    assert_eq!(session.host_id, "mac-laptop");
-    assert_eq!(session.os_type, OsType::MacOS);
-    assert_eq!(session.status, SessionStatus::Starting);
-    assert_eq!(session.cols, 80);
-    assert_eq!(session.rows, 24);
+    let packet = Packet::new("mac-sess", 1, payload);
+    let encoded = packet.to_msgpack().expect("Failed encode");
+    let decoded = Packet::from_msgpack(&encoded).expect("Failed decode");
+
+    if let PacketPayload::SubscribeSession { requested_role, .. } = decoded.payload {
+        assert_eq!(requested_role, SessionRole::Spectator);
+    } else {
+        panic!("Role mismatch!");
+    }
 }

@@ -1,95 +1,67 @@
 # Software Requirements Specification (SRS)
 ## Standard: IEEE 830-1998 Format
-### Project: Terminal Mirror System
+### Project: Terminal Mirror (Open-Source Edition)
 
 ---
 
 ### 1. Introduction
 
 #### 1.1 Purpose
-This document specifies the complete functional and non-functional software requirements for the **Terminal Mirror System**, comprising the macOS Host Daemon (`apps/mac`), Windows Host Daemon (`apps/windows`), Central Relay Server (`services/relay-server`), Shared Protocol Library (`crates/protocol`), and Android Mobile Application (`apps/android`).
+This document specifies the software requirements for the open-source **Terminal Mirror** platform, covering the multi-platform Host Agents (`apps/mac`, `apps/windows`, `apps/linux`), Central Relay Hub (`services/relay-server`), Shared Protocol Library (`crates/protocol`), and Android Mobile Application (`apps/android`).
 
-#### 1.2 Document Conventions
-* The keywords **SHALL**, **SHALL NOT**, **SHOULD**, **RECOMMENDED**, and **MAY** in this specification are interpreted as described in [RFC 2119](https://datatracker.ietf.org/doc/html/rfc2119).
-* Requirement identifiers:
-  * `FR-xxx`: Functional Requirement
-  * `NFR-xxx`: Non-Functional Requirement
-  * `SEC-xxx`: Security Requirement
-  * `IF-xxx`: Interface Requirement
-
-#### 1.3 Intended Audience
-Systems engineers, software architects, mobile developers, security auditors, and DevOps engineers maintaining the infrastructure.
+#### 1.2 System Scope
+The software provides universal, low-latency, end-to-end encrypted terminal mirroring and multiplexing capable of operating in both community public relay mode and self-hosted private hub mode.
 
 ---
 
-### 2. Overall Description
+### 2. Functional Requirements (FR)
 
-#### 2.1 Product Perspective
-Terminal Mirror operates as an autonomous client-server-agent system. The Relay Server acts as a non-persistent message router. The Host Daemons act as PTY controllers. The Android App acts as a VT100/ANSI terminal emulator frontend.
+#### 2.1 Host Daemon Subsystem
+* **FR-001**: The Host Daemon SHALL spawn the user's default shell in a Pseudo-Terminal (PTY) using `portable-pty` (POSIX `/dev/ptmx` on macOS/Linux, ConPTY on Windows).
+* **FR-002**: The Host Daemon SHALL continuously stream raw ANSI output delta chunks to the relay hub wrapped in encrypted envelopes.
+* **FR-003**: The Host Daemon SHALL write validated `TerminalInput` keystrokes received from authenticated `Admin` clients into the PTY master stream.
+* **FR-004**: **Virtual Screen Grid Engine**: The Host Daemon SHALL maintain an in-memory VT100 terminal emulator parser (via the `vt100` crate) that tracks current character cells, colors, cursor coordinates, and alternate screen status.
+* **FR-005**: **Reconnection Snapshot**: When a client reconnects after network loss, the Host Daemon SHALL emit a `PacketPayload::ScreenStateSync` containing the current screen grid snapshot to prevent visual artifacts and garbled text.
+* **FR-006**: **ConPTY Resize Debouncer**: On Windows hosts, the daemon SHALL debounce incoming `TerminalResize` events with a minimum 200 millisecond delay to prevent ConPTY frame storms and CPU saturation.
+* **FR-007**: **Dual-Role Authorization**: The Host Daemon SHALL enforce access roles:
+  * `SessionRole::Admin`: Permitted to stream output, send input keystrokes, and request terminal resizing.
+  * `SessionRole::Spectator`: Permitted to stream output only. All received input packets MUST be immediately discarded.
+* **FR-008**: **One-Time Pairing (Visual & PIN)**: The Host Daemon SHALL generate:
+  * An ASCII QR Code for visual pairing with mobile cameras.
+  * A 9-Digit Device ID and 6-Digit short PIN (e.g. `491-023`) valid for 10 minutes for pairing headless machines without monitors.
+* **FR-009**: **Persistent Device Trust**: The Host Daemon SHALL store authorized client public keys in `~/.config/terminal-mirror/authorized_devices.toml`, allowing subsequent reconnections without user interaction.
+* **FR-010**: **Emergency Kill Switch**: The Host Daemon SHALL intercept a physical keyboard shortcut (`Ctrl + Shift + Q`) to instantly disconnect all remote viewers, revoke active session tokens, and transition to isolated local-only mode.
 
-#### 2.2 System Interfaces
-* **POSIX PTY Interface** on macOS (`/dev/ptmx`, `termios`).
-* **ConPTY Subsystem** on Windows (`CreatePseudoConsole`, `ClosePseudoConsole`).
-* **Network Socket Layer**: WebSocket over TCP/TLS, optionally bound to ZeroTier Virtual Network Adapter.
-* **Android OS Native View**: Jetpack Compose and native Canvas/SurfaceView rendering via `termux-view`.
+#### 2.2 Relay Hub Subsystem (VPS & Community Relay)
+* **FR-011**: The Relay Hub SHALL provide an asynchronous WebSocket endpoint (`/ws`) capable of routing binary MessagePack envelopes between hosts and mobile clients.
+* **FR-012**: **Zero-Knowledge Blind Routing**: The Relay Hub SHALL route packets solely using plaintext outer routing headers (`session_id`, `trace_id`, `sequence`), without possessing cryptographic keys to inspect or modify encrypted payload blobs.
+* **FR-013**: **Hybrid Deployment**: The Relay Hub SHALL function identically whether deployed as a public community rendezvous server or as a self-hosted private hub behind ZeroTier, WireGuard, or local LAN.
+* **FR-014**: **Session Multiplexing**: The Relay Hub SHALL support multiplexing multiple host sessions to a single Android client connection.
+* **FR-015**: The Relay Hub SHALL maintain a heartbeat ping interval of 15 seconds, terminating dead sockets after 3 missed cycles (45 seconds).
 
----
-
-### 3. Specific Requirements
-
-#### 3.1 Functional Requirements (FR)
-
-##### 3.1.1 Host Daemon Subsystem (macOS & Windows)
-* **FR-001**: The Host Daemon SHALL spawn the user's default shell (e.g. `/bin/zsh`, `/bin/bash` on macOS, `powershell.exe`, `cmd.exe` on Windows) within a Pseudo-Terminal (PTY) instance upon startup.
-* **FR-002**: The Host Daemon SHALL capture stdout and stderr from the PTY master stream non-blockingly and encapsulate raw byte chunks into `PacketPayload::TerminalOutput` envelopes.
-* **FR-003**: The Host Daemon SHALL receive `PacketPayload::TerminalInput` envelopes from authenticated mobile clients and write the decoded bytes directly into the PTY master input writer.
-* **FR-004**: The Host Daemon SHALL support terminal window resizing upon receiving `PacketPayload::TerminalResize`, dynamically invoking `TIOCSWINSZ` on macOS and `ResizePseudoConsole` on Windows.
-* **FR-005**: The Host Daemon SHALL maintain an in-memory FIFO Ring Buffer retaining the most recent 1 MB of terminal output stream to serve instant replay buffers upon client reconnection.
-* **FR-006**: The Host Daemon SHALL generate a cryptographically signed QR Code on stdout using ASCII blocks containing session token, public key, and relay connection parameters.
-
-##### 3.1.2 Relay Server Subsystem (VPS)
-* **FR-007**: The Relay Server SHALL provide a high-throughput WebSocket endpoint (`/ws`) capable of handling concurrent binary streams across multiple hosts and clients.
-* **FR-008**: The Relay Server SHALL implement session routing using an in-memory thread-safe map (`DashMap`), associating `session_id` with active broadcast channels.
-* **FR-009**: The Relay Server SHALL reject unauthenticated connections that do not provide a valid `RELAY_AUTH_TOKEN` in the initial handshake headers.
-* **FR-010**: The Relay Server SHALL support multiplexed client subscriptions, permitting an Android client to subscribe to multiple `session_id` streams over a single physical WebSocket connection.
-* **FR-011**: The Relay Server SHALL emit a periodic heartbeat ping frame every 15 seconds to detect stale connections and reclaim orphaned session resources.
-
-##### 3.1.3 Android Client Subsystem
-* **FR-012**: The Android Client SHALL render terminal byte streams accurately adhering to ANSI X3.64 and VT100 escape sequence standards (colors, cursor positioning, clear screen).
-* **FR-013**: The Android Client SHALL provide a multi-session Tab Bar enabling immediate switching between active sessions (e.g. Mac Host vs Windows Host).
-* **FR-014**: The Android Client SHALL provide a **View-Only Guard Mode** enabled by default, discarding all user touch and soft-keyboard input until explicitly toggled off by the user.
-* **FR-015**: The Android Client SHALL provide an Accessory Keyboard Toolbar with quick-access hardware keys: `ESC`, `TAB`, `CTRL`, `ALT`, `PIPE (|)`, and Cursor Navigation (`↑`, `↓`, `←`, `→`).
-* **FR-016**: The Android Client SHALL provide a QR Code camera scanner to capture host pairing credentials without requiring manual IP address or secret key entry.
+#### 2.3 Android Client Subsystem
+* **FR-016**: The Android Client SHALL render ANSI X3.64 and VT100 terminal escape sequences cleanly via native Canvas or Termux `terminal-view`.
+* **FR-017**: **Known Hosts List**: The Android Client SHALL store paired host descriptors and public keys in the **Android KeyStore**, allowing 1-tap reconnections without scanning QR codes.
+* **FR-018**: **Raw Keyboard Input**: The Android Client SHALL configure soft keyboard input connections with `InputType.TYPE_NULL` to bypass Android IME word composition and autocorrect, preventing duplicate character bugs.
+* **FR-019**: **Accessory Terminal Bar**: The Android Client SHALL display a floating toolbar offering essential hardware terminal keys (`Esc`, `Tab`, `Ctrl`, `Alt`, `|`, `~`, Cursor Arrows).
+* **FR-020**: **View-Only Default Guard**: The Android Client SHALL default to **View-Only Mode**, rejecting screen touch input until explicitly toggled by the user.
 
 ---
 
-#### 3.2 Non-Functional Requirements (NFR)
+### 3. Non-Functional Requirements (NFR)
 
-##### 3.2.1 Performance & Latency
-* **NFR-001**: End-to-end keystroke latency (keystroke sent from Android -> written to Host PTY -> echo output rendered on Android) SHALL be less than **50 ms** over local network / ZeroTier LAN, and less than **100 ms** over 4G/5G mobile cellular networks.
-* **NFR-002**: Binary serialization and deserialization overhead per packet SHALL NOT exceed **1 millisecond**.
-
-##### 3.2.2 Resource Utilization
-* **NFR-003**: Host Daemon resident memory (RSS) SHALL NOT exceed **35 MB** under peak streaming load.
-* **NFR-004**: Host Daemon CPU consumption SHALL NOT exceed **2%** of a single CPU core during heavy terminal scrolling (e.g. running `cat bigfile.log`).
-* **NFR-005**: Relay Server memory consumption SHALL NOT exceed **50 MB** when routing up to 10 concurrent active sessions.
-
-##### 3.2.3 Reliability & Availability
-* **NFR-006**: The system SHALL automatically recover from transient network disconnects within **2,000 ms** of network interface restoration.
-* **NFR-007**: When a host daemon exits or the child shell terminates, the Relay Server and connected Android clients SHALL receive a graceful `SessionStatus::Terminated` notification within **500 ms**.
+* **NFR-001 (Keystroke Latency)**: End-to-end roundtrip latency for interactive keystrokes SHALL NOT exceed **50 ms** on LAN/Wi-Fi and **100 ms** on 4G/5G mobile networks.
+* **NFR-002 (Reconnection Sync Speed)**: Full screen state resynchronization following network reconnection SHALL complete in under **300 ms**.
+* **NFR-003 (Memory Footprint)**: Host daemon resident memory (RSS) SHALL NOT exceed **25 MB** during continuous heavy scroll operations.
+* **NFR-004 (Host CPU Overhead)**: Host daemon CPU consumption SHALL NOT exceed **1.5%** of a modern CPU core under continuous stream output.
+* **NFR-005 (Zero-Knowledge Guarantee)**: At no point in transmission SHALL plaintext terminal data traverse the Relay Hub unencrypted.
 
 ---
 
-#### 3.3 Security Requirements (SEC)
+### 4. Security & Cryptographic Requirements (SEC)
 
-* **SEC-001**: **Zero-Knowledge Relay Assurance**: The Relay Server SHALL NOT possess cryptographic private keys or shared symmetric secrets required to decrypt terminal payloads. Terminal output and keystrokes MUST be end-to-end encrypted between Host and Client using **ChaCha20-Poly1305** or **AES-256-GCM**.
-* **SEC-002**: **Network Boundary Protection**: The Relay Server configuration SHALL permit binding strictly to a private virtual interface (e.g. ZeroTier IP `10.x.x.x` or loopback) to prevent exposure to the public internet.
-* **SEC-003**: **Replay Attack Mitigation**: Each packet envelope SHALL include a monotonically increasing 64-bit sequence number and UTC millisecond timestamp; clients and hosts SHALL reject packets with duplicate or backward sequence numbers.
-* **SEC-004**: **Token Secrecy**: Pairing tokens and private keys SHALL NEVER be committed to version control, logged to disk in plaintext, or transmitted unencrypted.
-* **SEC-005**: **Least Privilege**: The Host Daemon SHALL execute under the permissions of the invoking standard user and SHALL NOT require or request elevated root/administrator privileges.
-
----
-
-#### 3.4 Interface Requirements (IF)
-* **IF-001**: All wire communications SHALL strictly conform to the `Packet` envelope schema defined in `terminal-mirror-protocol` serialized via MessagePack (`rmp-serde`).
-* **IF-002**: The Relay Server HTTP health probe SHALL return HTTP `200 OK` with payload `"OK"` on endpoint `GET /health`.
+* **SEC-001 (Symmetric Encryption)**: Payloads MUST be encrypted using **ChaCha20-Poly1305** (AEAD) with authenticated associated data (AAD) binding to the session ID and sequence number.
+* **SEC-002 (Key Exchange)**: Ephemeral session keys MUST be derived using **X25519** Diffie-Hellman key exchange.
+* **SEC-003 (Anti-Replay Protection)**: Receivers MUST enforce a sliding window verification of monotonically increasing sequence counters ($S_n$), dropping duplicate or delayed packets.
+* **SEC-004 (Key Storage)**: Client cryptographic keys on Android MUST be protected using the hardware-backed **Android KeyStore Provider**.
+* **SEC-005 (Least Privilege)**: Host daemons MUST execute under standard unprivileged user accounts.
