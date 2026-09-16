@@ -12,7 +12,7 @@
 - **Nama Branch**: `feature/android-e2ee-pairing-and-ci`
 - **Nama Repo**: `terminal-mirror`
 - **URL Repo**: `https://github.com/mufidhadi/terminal-mirror`
-- **Nomor Hash Commit**: *(pending commit)*
+- **Nomor Hash Commit**: `111aee3`
 - **Tech Stack**:
   - **Android Client**: Kotlin 1.9.24, Jetpack Compose (BOM 2024.05.00), CameraX 1.3.3 (`camera-core`, `camera-camera2`, `camera-lifecycle`, `camera-view`), Google ML Kit Barcode Scanning 17.2.0, Android Native Cryptography (`Cipher.getInstance("ChaCha20-Poly1305/None/NoPadding")`, `IvParameterSpec`, `MessageDigest SHA-256`), OkHttp 4.12.0 WebSocket, MessagePack (`jackson-dataformat-msgpack`), Android KeyStore.
   - **macOS Host Agent**: Rust (2021 edition), `portable-pty` 0.8, `chacha20poly1305` 0.10, `sha2` 0.10, `tokio-tungstenite`, `rmp-serde`.
