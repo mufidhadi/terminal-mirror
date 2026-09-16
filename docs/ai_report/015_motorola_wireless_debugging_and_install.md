@@ -12,7 +12,7 @@
 - **Nama Branch**: `feature/motorola-wireless-debugging-install`
 - **Nama Repo**: `terminal-mirror`
 - **URL Repo**: `https://github.com/mufidhadi/terminal-mirror`
-- **Nomor Hash Commit**: *(pending commit)*
+- **Nomor Hash Commit**: `d76e132`
 - **Tech Stack**:
   - **Physical Device**: Motorola `moto_g45_5G` (Android 14, codename `fogos_gpn`, serial `ZP22223JL3`).
   - **Network & Connectivity**: Wi-Fi LAN (`192.168.0.129:5555`), ZeroTier VPN Client (`com.zerotier.one`, target IP `172.23.191.143`), TCP/IP port 5555.
