@@ -1,6 +1,6 @@
 use terminal_mirror_protocol::{
-    Packet, PacketPayload, PairingGuard, PairingPayload, ScreenSnapshot, SessionRole,
-    Utf8StreamChunker, PROTOCOL_VERSION,
+    CompressionAlgorithm, Packet, PacketPayload, PairingGuard, PairingPayload, ScreenSnapshot,
+    SessionRole, Utf8StreamChunker, PROTOCOL_VERSION,
 };
 
 #[test]
@@ -16,10 +16,11 @@ fn test_packet_creation_and_version() {
 }
 
 #[test]
-fn test_packet_msgpack_roundtrip_terminal_output() {
+fn test_packet_msgpack_roundtrip_terminal_output_compressed() {
     let raw_terminal_bytes = b"\x1b[32muser@host:~$ \x1b[0mls -la\r\ntotal 12\r\n".to_vec();
     let payload = PacketPayload::TerminalOutput {
         bytes: raw_terminal_bytes.clone(),
+        compression: CompressionAlgorithm::Zstd,
     };
     let packet = Packet::new("mac-session-001", 105, payload);
 
@@ -30,8 +31,9 @@ fn test_packet_msgpack_roundtrip_terminal_output() {
     assert_eq!(decoded.session_id, "mac-session-001");
     assert_eq!(decoded.sequence, 105);
 
-    if let PacketPayload::TerminalOutput { bytes } = decoded.payload {
+    if let PacketPayload::TerminalOutput { bytes, compression } = decoded.payload {
         assert_eq!(bytes, raw_terminal_bytes);
+        assert_eq!(compression, CompressionAlgorithm::Zstd);
     } else {
         panic!("Decoded payload variant mismatch!");
     }
@@ -113,21 +115,17 @@ fn test_session_role_subscription() {
 fn test_utf8_stream_chunker_multibyte_slicing() {
     let mut chunker = Utf8StreamChunker::new();
 
-    // Rocket emoji "🚀" is 4 bytes: [0xF0, 0x9F, 0x9A, 0x80]
     let rocket_bytes = "🚀".as_bytes();
     assert_eq!(rocket_bytes.len(), 4);
 
-    // Split rocket in half: 2 bytes in chunk 1, 2 bytes in chunk 2
     let chunk_1 = vec![b'A', b'B', rocket_bytes[0], rocket_bytes[1]];
     let chunk_2 = vec![rocket_bytes[2], rocket_bytes[3], b'C'];
 
     let out_1 = chunker.process_chunk(&chunk_1);
-    // Out 1 should only contain "AB" and withhold the incomplete 2 bytes
     assert_eq!(out_1, b"AB");
     assert_eq!(chunker.pending_len(), 2);
 
     let out_2 = chunker.process_chunk(&chunk_2);
-    // Out 2 should reassemble the full rocket emoji and "C"
     assert_eq!(out_2, "🚀C".as_bytes());
     assert_eq!(chunker.pending_len(), 0);
 }
@@ -136,22 +134,18 @@ fn test_utf8_stream_chunker_multibyte_slicing() {
 fn test_pairing_guard_three_strikes_auto_burn() {
     let mut guard = PairingGuard::new("sess-123", "kuda-terbang-batu-merah");
 
-    // 1st wrong attempt
     let res1 = guard.verify_attempt("wrong-password-1");
     assert_eq!(res1, Err(2));
     assert!(!guard.is_burned);
 
-    // 2nd wrong attempt
     let res2 = guard.verify_attempt("wrong-password-2");
     assert_eq!(res2, Err(1));
     assert!(!guard.is_burned);
 
-    // 3rd wrong attempt -> BURNED!
     let res3 = guard.verify_attempt("wrong-password-3");
     assert_eq!(res3, Err(0));
     assert!(guard.is_burned);
 
-    // Even if 4th attempt is the right secret, it must be rejected because it is burned!
     let res4 = guard.verify_attempt("kuda-terbang-batu-merah");
     assert_eq!(res4, Err(0));
 }

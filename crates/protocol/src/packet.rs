@@ -12,6 +12,15 @@ pub enum SessionRole {
     Spectator,
 }
 
+/// Compression algorithm applied to high-throughput terminal payloads
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub enum CompressionAlgorithm {
+    #[default]
+    None,
+    /// Zstandard compression (level 1) for 70-85% bandwidth reduction
+    Zstd,
+}
+
 /// Top-level wire message envelope
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Packet {
@@ -99,6 +108,8 @@ pub enum PacketPayload {
     /// Raw terminal output (ANSI/VT100 delta stream) from PTY
     TerminalOutput {
         bytes: Vec<u8>,
+        #[serde(default)]
+        compression: CompressionAlgorithm,
     },
     /// Complete visual state snapshot sent upon client reconnect
     ScreenStateSync {

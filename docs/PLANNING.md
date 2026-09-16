@@ -1,63 +1,44 @@
 # Engineering Execution & Project Planning Document
-## Project: Terminal Mirror (Open-Source Edition)
+## Project: Terminal Mirror (Hardened Open-Source & Performance Edition)
 
 ---
 
-### 1. Release Roadmaps & Community Milestones
+### 1. Release Roadmaps & Performance Milestones
 
 ```
 [Sprint 1: Core Protocol & Workspace Scaffolding] (COMPLETED)
        │
        ▼
-[Sprint 2: Host Daemons + vt100 Virtual Grid & ConPTY Debouncer]
+[Sprint 2: Host Daemons + vt100 Grid + zstd Compression]
        │
        ▼
-[Sprint 3: Zero-Knowledge E2EE & Persistent PIN/QR Pairing]
+[Sprint 3: Zero-Knowledge E2EE + 3-Strike PairingGuard + Relay Rate Limiter]
        │
        ▼
-[Sprint 4: Android App + Known Hosts UI + Raw Key IME Engine]
+[Sprint 4: Android SurfaceView Engine + Foreground Service + KeyStore]
        │
        ▼
-[Sprint 5: Open-Source Release, Packaging & Public Relay Hub]
+[Sprint 5: Stress-Testing, Self-Host Packaging & Community Launch]
 ```
 
 ---
 
-### 2. Sprint Breakdown
+### 2. Dedicated Performance & Capacity Workstreams
 
-#### Sprint 1: Protocol, Specs & Architecture (COMPLETED)
-* Monorepo layout with Rust workspace and Android submodule.
-* MessagePack wire protocol with `ScreenSnapshot`, `SessionRole`, `PairWithPin`.
-* 100% passing unit tests on protocol serialization.
-* Full documentation suite in `/docs`.
+#### Task P.1: Zstandard (`zstd`) Benchmark Validation
+* Integrate `zstd` level 1 compression into `TerminalOutput` chunks > 512 bytes.
+* Benchmark compression ratio and CPU overhead using Criterion.rs against real GCC/Rust build logs.
+* Target: 70–85% payload reduction with < 0.2ms CPU compression cost per chunk.
 
-#### Sprint 2: Resilient Host Daemons (`apps/mac` & `apps/windows`)
-* **Task 2.1**: Integrate `vt100` parser crate into Host Daemon to track visual screen grid in real time.
-* **Task 2.2**: Implement `ScreenStateSync` generation upon client reconnect signal.
-* **Task 2.3**: Build ConPTY Resize Debouncer on Windows with 200 ms settling window and `PASSTHROUGH_MODE`.
-* **Task 2.4**: Implement physical keyboard emergency revocation hook (`Ctrl+Shift+Q`).
+#### Task P.2: Backpressure Stress-Testing (The `cat 1GB.log` Test)
+* Simulate a runaway script producing 100 MB/s PTY output.
+* Validate that `mpsc::channel(1024)` bounded buffer drops intermediate delta frames when downstream is throttled, falling back cleanly to `ScreenStateSync` without memory growth.
+* Target: Host daemon RSS stays strictly under 25 MB under infinite loop stress.
 
-#### Sprint 3: Zero-Knowledge E2EE & Universal Pairing
-* **Task 3.1**: Implement ChaCha20-Poly1305 AEAD cipher engine on Host and Client.
-* **Task 3.2**: Add dual pairing generators: ASCII QR Code on terminal and 6-digit PIN generator.
-* **Task 3.3**: Implement `authorized_devices.toml` persistent storage on host.
-* **Task 3.4**: Deploy public community rendezvous relay on VPS with Docker Compose.
+#### Task P.3: Mobile Thermal & Battery Profiling
+* Profile Android client on Motorola device using Android Studio Profiler over a 60-minute continuous stream session.
+* Target: GPU/CPU utilization < 5%, zero UI frame jank (constant 60 FPS), battery discharge < 4%/hour.
 
-#### Sprint 4: Android App & Native UX
-* **Task 4.1**: Jetpack Compose multi-session tab manager with native `termux-view` rendering.
-* **Task 4.2**: Hardware-backed **Android KeyStore** integration for persistent "Known Hosts" 1-tap connect.
-* **Task 4.3**: Override `InputConnection` with `TYPE_NULL` to eliminate Gboard autocomplete bugs.
-* **Task 4.4**: Floating accessory terminal keyboard (`Esc`, `Tab`, `Ctrl`, `Alt`, navigation arrows).
-
-#### Sprint 5: Open-Source Packaging & Community Launch
-* **Task 5.1**: Homebrew formula (`brew install mufidhadi/tap/terminal-mirror`).
-* **Task 5.2**: Windows Winget package manifest.
-* **Task 5.3**: Android APK release on GitHub Releases & F-Droid repository submission.
-* **Task 5.4**: Public launch on Hacker News (Show HN), Reddit (`r/rust`, `r/commandline`), and Product Hunt.
-
----
-
-### 3. Open-Source Quality & Security Standards
-* **TDD Requirement**: Every new protocol message or parser routine must include automated tests in `crates/protocol/tests/`.
-* **Zero Secret Leakage**: Continuous GitHub Actions check verifying no private IP addresses or tokens exist in commits.
-* **Code Formatting**: Strict enforcement of `cargo fmt --check` and `cargo clippy -- -D warnings`.
+#### Task P.4: VPS Hostinger Capacity Isolation
+* Validate that Relay Server container running on VPS Hostinger (`172.23.127.184`) uses < 20 MB RAM and 0.05% CPU.
+* Enforce ZeroTier-only binding in `docker-compose.yml`, verifying that no public traffic touches the host and zero bandwidth is counted against Hostinger's monthly quota.

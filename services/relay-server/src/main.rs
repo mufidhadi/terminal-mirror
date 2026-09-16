@@ -17,6 +17,7 @@ type SessionHub = Arc<DashMap<String, broadcast::Sender<Vec<u8>>>>;
 type RateLimiter = Arc<DashMap<std::net::IpAddr, (u32, Instant)>>;
 
 #[derive(Clone)]
+#[allow(dead_code)]
 struct AppState {
     hub: SessionHub,
     rate_limiter: RateLimiter,
@@ -64,25 +65,27 @@ async fn ws_handler(
     State(state): State<AppState>,
 ) -> Result<impl IntoResponse, StatusCode> {
     // Rate Limiting Guard per IP to prevent DoS & botnet C2 abuse
-    let client_ip = addr.ip();
-    let mut entry = state.rate_limiter.entry(client_ip).or_insert((0, Instant::now()));
-    let (count, start_time) = entry.value_mut();
+    {
+        let client_ip = addr.ip();
+        let mut entry = state.rate_limiter.entry(client_ip).or_insert((0, Instant::now()));
+        let (count, start_time) = entry.value_mut();
 
-    if start_time.elapsed().as_secs() > 60 {
-        *count = 1;
-        *start_time = Instant::now();
-    } else {
-        *count += 1;
-        if *count > MAX_CONNECTIONS_PER_MINUTE {
-            warn!("Rate limit exceeded for IP: {}. Dropping connection.", client_ip);
-            return Err(StatusCode::TOO_MANY_REQUESTS);
+        if start_time.elapsed().as_secs() > 60 {
+            *count = 1;
+            *start_time = Instant::now();
+        } else {
+            *count += 1;
+            if *count > MAX_CONNECTIONS_PER_MINUTE {
+                warn!("Rate limit exceeded for IP: {}. Dropping connection.", client_ip);
+                return Err(StatusCode::TOO_MANY_REQUESTS);
+            }
         }
     }
 
     Ok(ws.on_upgrade(move |socket| handle_socket(socket, addr, state)))
 }
 
-async fn handle_socket(mut socket: WebSocket, addr: SocketAddr, state: AppState) {
+async fn handle_socket(mut socket: WebSocket, addr: SocketAddr, _state: AppState) {
     info!("New client connected from: {}", addr);
 
     while let Some(msg) = socket.recv().await {
