@@ -3,8 +3,8 @@
 
 **Repository**: [github.com/mufidhadi/terminal-mirror](https://github.com/mufidhadi/terminal-mirror)  
 **Primary Architect**: mas mufid  
-**Latest Verified Commit**: `3734f21`  
-**Active Working Branch**: `feature/android-e2ee-pairing-and-ci`  
+**Latest Verified Commit**: `e75eed1`  
+**Active Working Branch**: `feature/live-android-avd-vps-integration`  
 
 ---
 
@@ -16,7 +16,7 @@
 | **Sprint 2: Server Relay Hub & Production Deployment** | Axum/Tokio WebSocket blind router, IP rate limiter (60/min), Prometheus metrics, ZeroTier isolation, Docker containerization on Hostinger VPS (`172.23.127.184:8888`). | **100% DONE** | Live VPS container healthy, HTTP 200 on `/healthz`, telemetry on `/metrics`, rate-limiting burst block verified. |
 | **Sprint 3: Zero-Knowledge E2EE & Pairing Engine** | ChaCha20-Poly1305 AEAD, deterministic 96-bit sequence nonces, 4-word Diceware generator (~51.7 bits), 3-strike `PairingGuard`, Terminal QR code generator (`Dense1x2`), cross-platform SHA-256 KDF. | **100% DONE** | Cross-platform roundtrip tested across Rust, Kotlin, and Python. Zero relay access to plaintext. |
 | **Sprint 4: Workstation Host Agents (macOS & Windows)** | Darwin PTY (`/bin/zsh -l`) with E2EE integration; Windows ConPTY with 200ms resize debouncer, PowerShell bypass execution policies, startup banners. | **90% DONE** | macOS agent fully integrated and live verified over VPS; Windows agent unit tests passing (8 tests). |
-| **Sprint 5: Android Mobile Client & Pairing UX** | Jetpack Compose UI (workstation tabs, status header, programmer keyboard accessory bar), CameraX + ML Kit QR scanner, native Android ChaCha20-Poly1305 `E2eeManager`, Foreground Service. | **75% DONE** | CameraX & ML Kit scanner implemented; E2EE crypto matched with Rust; GitHub Actions APK CI configured. |
+| **Sprint 5: Android Mobile Client & Pairing UX** | Jetpack Compose UI (workstation tabs, live monospace terminal viewport, accessory keyboard bar), Conscrypt ChaCha20-Poly1305 fallback, OkHttp WebSocket, Foreground Service API 35 compliance, live AVD execution. | **100% DONE** | Live bidirectional streaming verified on AVD API 35 (`Small_Phone`) executing real Darwin PTY commands via VPS (`172.23.127.184:8888`). |
 | **Sprint 6: Stress-Testing, Optimization & Production Launch** | Zstandard (`zstd`) stream compression, 100 MB/s PTY backpressure stress test (`cat 1GB.log`), Termux engine surface binding, physical Motorola battery profiling. | **25% DONE** | Basic coalescer and debouncer active; full soak test pending. |
 
 ---
