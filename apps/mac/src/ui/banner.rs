@@ -80,13 +80,13 @@ mod tests {
     #[test]
     fn test_compact_qr_fits_in_standard_terminal_height() {
         let payload = terminal_mirror_protocol::PairingPayload {
-            relay_url: "ws://172.23.127.184:8888/ws".to_string(),
+            relay_url: "ws://relay.example.internal:8888/ws".to_string(),
             session_id: "mac-live-session".to_string(),
             host_id: "macbook-pro".to_string(),
             pre_shared_key: "secret".to_string(),
             public_key: "".to_string(),
             pin_code: None,
-            passphrase_words: Some(vec!["batu".into(), "merah".into(), "kuda".into(), "terbang".into()]),
+            passphrase_words: Some(vec!["kilo".into(), "lima".into(), "sierra".into(), "tango".into()]),
             expires_at_ms: 1726532000000,
         };
         let qr_string = payload.to_qr_string().expect("to_qr_string failed");

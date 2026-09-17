@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import json
+import os
 import struct
 import urllib.request
 import pytest
@@ -9,10 +10,16 @@ from websockets.exceptions import InvalidStatus
 import msgpack
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 
-RELAY_HOST = "172.23.127.184:8888"
+# Live-VPS credentials must come from the environment (never committed).
+RELAY_HOST = os.getenv("RELAY_HOST", "")
 WS_URL = f"ws://{RELAY_HOST}/ws"
 HTTP_URL = f"http://{RELAY_HOST}"
-AUTH_TOKEN = "masmufid_super_secret_relay_2026"
+AUTH_TOKEN = os.getenv("AUTH_TOKEN", "")
+
+requires_live_relay = pytest.mark.skipif(
+    not (RELAY_HOST and AUTH_TOKEN),
+    reason="Live VPS relay test: set RELAY_HOST/AUTH_TOKEN env (never commit secrets)",
+)
 
 
 def derive_key(passphrase: str) -> bytes:
@@ -25,6 +32,7 @@ def derive_nonce(seq: int) -> bytes:
     return b"\x00\x00\x00\x00" + struct.pack(">Q", seq)
 
 
+@requires_live_relay
 def test_vps_relay_healthz():
     """Verify live VPS relay container health endpoint"""
     req = urllib.request.Request(f"{HTTP_URL}/healthz")
@@ -34,6 +42,7 @@ def test_vps_relay_healthz():
         assert "OK" in body
 
 
+@requires_live_relay
 def test_vps_relay_metrics():
     """Verify Prometheus metrics exposed on live VPS relay"""
     req = urllib.request.Request(f"{HTTP_URL}/metrics")
@@ -44,6 +53,7 @@ def test_vps_relay_metrics():
         assert "relay_frames_routed_total" in body
 
 
+@requires_live_relay
 @pytest.mark.asyncio
 async def test_vps_relay_unauthorized_token_rejection():
     """Verify VPS relay rejects connections with bad auth tokens (401)"""
@@ -54,6 +64,7 @@ async def test_vps_relay_unauthorized_token_rejection():
     assert excinfo.value.response.status_code == 401
 
 
+@requires_live_relay
 @pytest.mark.asyncio
 async def test_vps_relay_e2ee_chacha20poly1305_live_exchange():
     """

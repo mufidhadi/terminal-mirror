@@ -74,6 +74,18 @@ object KeystrokeEncoder {
 object RelayConfig {
     const val PLACEHOLDER_HOST = "relay.example.internal:8888"
     const val PLACEHOLDER_TOKEN = "RELAY_TOKEN_PLACEHOLDER"
+    const val PLACEHOLDER_PASSPHRASE = "REPLACE_WITH_PAIRED_PASSPHRASE"
+
+    /**
+     * Resolves a configured value (from BuildConfig, sourced from the
+     * git-ignored `local.properties` or CI env) to a safe effective value.
+     * Blank config falls back to placeholders that never touch production.
+     */
+    fun resolveHost(configured: String): String =
+        configured.trim().ifEmpty { PLACEHOLDER_HOST }
+
+    fun resolveToken(configured: String): String =
+        configured.trim().ifEmpty { PLACEHOLDER_TOKEN }
 
     fun wsUrl(host: String, token: String, sessionId: String): String {
         require(host.isNotBlank()) { "relay host must not be blank" }

@@ -10,7 +10,7 @@ use std::io::Read;
 use std::sync::Arc;
 use std::time::Duration;
 use stream::{ResizeDebouncer, StreamCoalescer};
-use terminal_mirror_protocol::Utf8StreamChunker;
+use terminal_mirror_protocol::{DicewarePassphrase, Utf8StreamChunker};
 use tokio::sync::mpsc;
 use tracing::info;
 use ui::render_startup_banner;
@@ -23,7 +23,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let resolved = resolve_windows_shell(config.shell.as_deref());
     let session_id = format!("{}-{}", config.host_id, &uuid::Uuid::new_v4().to_string()[..8]);
-    let sample_passphrase = "batu-merah-kuda-terbang";
+    // Passphrase is never hardcoded: explicit --passphrase/PASSPHRASE wins,
+    // otherwise a fresh ephemeral 4-word Diceware passphrase is generated.
+    let formatted_passphrase = if let Some(custom) = &config.passphrase {
+        custom.clone()
+    } else {
+        DicewarePassphrase::format(&DicewarePassphrase::generate(4))
+    };
+    let sample_passphrase = formatted_passphrase.as_str();
 
     if config.tray {
         info!("Running Windows Agent in System Tray mode");

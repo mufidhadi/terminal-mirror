@@ -25,9 +25,9 @@ mod tests {
 
     #[test]
     fn test_format_startup_banner_contains_required_fields() {
-        let banner = format_startup_banner("win-test-1234", "batu-merah-kuda-terbang", "pwsh.exe");
+        let banner = format_startup_banner("win-test-1234", "kilo-lima-sierra-tango", "pwsh.exe");
         assert!(banner.contains("win-test-1234"));
-        assert!(banner.contains("batu-merah-kuda-terbang"));
+        assert!(banner.contains("kilo-lima-sierra-tango"));
         assert!(banner.contains("pwsh.exe"));
         assert!(banner.contains("ConPTY Active"));
         assert!(banner.contains("Ctrl + Shift + Q"));

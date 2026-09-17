@@ -144,7 +144,7 @@ async fn test_e2e_chacha20poly1305_zero_knowledge_relay() {
 
     let (addr, token) = spawn_test_server(60).await;
     let session_id = "e2ee-session-42";
-    let shared_passphrase = "batu-merah-kuda-terbang";
+    let shared_passphrase = "kilo-lima-sierra-tango";
 
     let host_cipher = E2eeCipher::from_secret(shared_passphrase);
     let subscriber_cipher = E2eeCipher::from_secret(shared_passphrase);

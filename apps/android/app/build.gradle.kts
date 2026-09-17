@@ -18,6 +18,29 @@ android {
         ndk {
             abiFilters += listOf("arm64-v8a")
         }
+
+        // Relay connection config comes from the git-ignored local.properties
+        // (dev machines) or CI environment — never hardcoded. CI builds without
+        // these keys fall back to placeholders that cannot reach production.
+        val localProps = java.util.Properties()
+        val localPropsFile = rootProject.file("local.properties")
+        if (localPropsFile.exists()) {
+            localPropsFile.inputStream().use { localProps.load(it) }
+        }
+        fun configValue(name: String, default: String): String =
+            localProps.getProperty(name) ?: System.getenv(name) ?: default
+        buildConfigField(
+            "String", "RELAY_HOST",
+            "\"${configValue("RELAY_HOST", "relay.example.internal:8888")}\""
+        )
+        buildConfigField(
+            "String", "RELAY_TOKEN",
+            "\"${configValue("RELAY_TOKEN", "RELAY_TOKEN_PLACEHOLDER")}\""
+        )
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     buildTypes {

@@ -9,32 +9,32 @@ class PairingPayloadParserTest {
 
     @Test
     fun testParseCompactUri() {
-        val uri = "tm://172.23.127.184:8888/ws?s=mac-live-session&k=masmufid_super_secret_relay_2026&p=batu-merah-kuda-terbang"
+        val uri = "tm://relay.example.internal:8888/ws?s=mac-live-session&k=TEST_RELAY_TOKEN&p=kilo-lima-sierra-tango"
         val payload = PairingPayloadParser.parse(uri)
 
         assertNotNull(payload)
-        assertEquals("ws://172.23.127.184:8888/ws", payload?.relayUrl)
+        assertEquals("ws://relay.example.internal:8888/ws", payload?.relayUrl)
         assertEquals("mac-live-session", payload?.sessionId)
-        assertEquals("masmufid_super_secret_relay_2026", payload?.preSharedKey)
-        assertEquals("batu-merah-kuda-terbang", payload?.getFormattedPassphrase())
+        assertEquals("TEST_RELAY_TOKEN", payload?.preSharedKey)
+        assertEquals("kilo-lima-sierra-tango", payload?.getFormattedPassphrase())
     }
 
     @Test
     fun testParseStandardJson() {
         val json = """
             {
-                "relay_url": "ws://172.23.127.184:8888/ws",
+                "relay_url": "ws://relay.example.internal:8888/ws",
                 "session_id": "mac-live-session",
                 "host_id": "macbook-pro",
-                "pre_shared_key": "masmufid_super_secret_relay_2026",
-                "passphrase_words": ["batu", "merah", "kuda", "terbang"]
+                "pre_shared_key": "TEST_RELAY_TOKEN",
+                "passphrase_words": ["kilo", "lima", "sierra", "tango"]
             }
         """.trimIndent()
 
         val payload = PairingPayloadParser.parse(json)
         assertNotNull(payload)
-        assertEquals("ws://172.23.127.184:8888/ws", payload?.relayUrl)
+        assertEquals("ws://relay.example.internal:8888/ws", payload?.relayUrl)
         assertEquals("mac-live-session", payload?.sessionId)
-        assertEquals("batu-merah-kuda-terbang", payload?.getFormattedPassphrase())
+        assertEquals("kilo-lima-sierra-tango", payload?.getFormattedPassphrase())
     }
 }

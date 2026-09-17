@@ -28,6 +28,10 @@ pub struct WindowsAgentConfig {
     #[arg(long, env = "RELAY_AUTH_TOKEN", default_value = "change_this_secret_token")]
     pub auth_token: String,
 
+    /// Optional explicit passphrase (defaults to 4-word random Diceware)
+    #[arg(long, env = "PASSPHRASE")]
+    pub passphrase: Option<String>,
+
     /// Run as background daemon in Windows Notification Area (System Tray)
     #[arg(long, default_value_t = false)]
     pub tray: bool,
@@ -55,6 +59,7 @@ mod tests {
         assert!(!config.tray);
         assert!(!config.service_install);
         assert_eq!(config.resize_debounce_ms, 200);
+        assert_eq!(config.passphrase, None);
     }
 
     #[test]

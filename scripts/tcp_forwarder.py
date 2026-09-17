@@ -1,9 +1,10 @@
 import asyncio
+import os
 import sys
 
-LOCAL_PORT = 8888
-REMOTE_HOST = "172.23.127.184"
-REMOTE_PORT = 8888
+LOCAL_PORT = int(os.getenv("LOCAL_PORT", "8888"))
+REMOTE_HOST = os.getenv("REMOTE_HOST", "127.0.0.1")
+REMOTE_PORT = int(os.getenv("REMOTE_PORT", "8888"))
 
 async def pipe(reader, writer):
     try:

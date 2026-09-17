@@ -8,11 +8,17 @@ import websockets
 import msgpack
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 
-RELAY_HOST = "172.23.127.184:8888"
+# Live-VPS credentials must come from the environment (never committed).
+RELAY_HOST = os.getenv("RELAY_HOST", "")
 WS_URL = f"ws://{RELAY_HOST}/ws"
-AUTH_TOKEN = "masmufid_super_secret_relay_2026"
+AUTH_TOKEN = os.getenv("AUTH_TOKEN", "")
 SESSION_ID = "live-keystroke-trace-session"
-PASSPHRASE = "batu-merah-kuda-terbang"
+PASSPHRASE = os.getenv("PASSPHRASE", "")
+
+requires_live_relay = pytest.mark.skipif(
+    not (RELAY_HOST and AUTH_TOKEN and PASSPHRASE),
+    reason="Live VPS relay test: set RELAY_HOST/AUTH_TOKEN/PASSPHRASE env (never commit secrets)",
+)
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MAC_BINARY = os.path.join(PROJECT_ROOT, "target", "debug", "terminal-mirror-mac")
@@ -26,6 +32,7 @@ def derive_nonce(seq: int) -> bytes:
     return b"\x00\x00\x00\x00" + struct.pack(">Q", seq)
 
 
+@requires_live_relay
 @pytest.mark.asyncio
 async def test_trace_raw_keystroke_bytes():
     """

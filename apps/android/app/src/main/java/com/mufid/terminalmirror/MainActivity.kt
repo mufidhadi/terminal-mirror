@@ -102,9 +102,10 @@ fun TerminalMirrorApp(
     val screenBuffers = remember { mutableMapOf<String, TerminalScreenBuffer>() }
     val terminalBuffers = remember { mutableStateMapOf<String, String>() }
 
-    // E2EE manager and protocol codec (defaults to standard passphrase)
+    // E2EE manager and protocol codec. The default passphrase is a placeholder:
+    // real pairing always replaces it via QR/deep-link before streaming.
     val e2eeCipher = remember {
-        mutableStateOf(E2eeManager.fromSecret("batu-merah-kuda-terbang"))
+        mutableStateOf(E2eeManager.fromSecret(RelayConfig.PLACEHOLDER_PASSPHRASE))
     }
     val codec = remember {
         derivedStateOf { ProtocolCodec(e2eeCipher.value) }
@@ -159,10 +160,10 @@ fun TerminalMirrorApp(
     }
 
     // Auto-connect to default live session on launch.
-    // Real relay host/token must come from a local (uncommitted) config or
-    // pairing QR — never hardcoded. Placeholders keep the public repo clean.
-    val configuredRelayHost = remember { RelayConfig.PLACEHOLDER_HOST }
-    val configuredRelayToken = remember { RelayConfig.PLACEHOLDER_TOKEN }
+    // Real relay host/token come from BuildConfig (git-ignored local.properties
+    // or CI env) — never hardcoded. Blanks resolve to safe placeholders.
+    val configuredRelayHost = remember { RelayConfig.resolveHost(BuildConfig.RELAY_HOST) }
+    val configuredRelayToken = remember { RelayConfig.resolveToken(BuildConfig.RELAY_TOKEN) }
     LaunchedEffect(Unit) {
         val relayHost = if (isEmulator) "127.0.0.1:8888" else configuredRelayHost
         val defaultRelayUrl = RelayConfig.wsUrl(relayHost, configuredRelayToken, "mac-live-session")
