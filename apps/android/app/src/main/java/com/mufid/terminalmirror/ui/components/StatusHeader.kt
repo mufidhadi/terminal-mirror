@@ -13,9 +13,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mufid.terminalmirror.model.TerminalSession
+import com.mufid.terminalmirror.ui.TerminalUiHelpers
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -29,17 +31,24 @@ fun StatusHeader(
 ) {
     TopAppBar(
         title = {
-            Column {
+            Column(modifier = Modifier.fillMaxWidth(0.55f)) {
                 Text(
                     text = "Terminal Mirror",
                     fontSize = 17.sp,
-                    color = Color.White
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 if (activeSession != null) {
                     Text(
-                        text = "${activeSession.hostName} • ${activeSession.shell}",
+                        text = TerminalUiHelpers.sessionSubtitle(
+                            activeSession.hostName,
+                            activeSession.shell
+                        ),
                         fontSize = 11.sp,
-                        color = Color(0xFFAAAAAA)
+                        color = Color(0xFFAAAAAA),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }

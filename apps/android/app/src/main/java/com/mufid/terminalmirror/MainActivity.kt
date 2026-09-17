@@ -34,6 +34,9 @@ import com.mufid.terminalmirror.network.ProtocolCodec
 import com.mufid.terminalmirror.service.TerminalMirrorService
 import com.mufid.terminalmirror.terminal.TerminalBufferProcessor
 import com.mufid.terminalmirror.terminal.TerminalScreenBuffer
+import com.mufid.terminalmirror.ui.KeystrokeEncoder
+import com.mufid.terminalmirror.ui.RelayConfig
+import com.mufid.terminalmirror.ui.TerminalUiHelpers
 import com.mufid.terminalmirror.ui.components.AccessoryBar
 import com.mufid.terminalmirror.ui.components.QrScannerDialog
 import com.mufid.terminalmirror.ui.components.StatusHeader
@@ -155,10 +158,14 @@ fun TerminalMirrorApp(
         )
     }
 
-    // Auto-connect to default live session on launch
+    // Auto-connect to default live session on launch.
+    // Real relay host/token must come from a local (uncommitted) config or
+    // pairing QR — never hardcoded. Placeholders keep the public repo clean.
+    val configuredRelayHost = remember { RelayConfig.PLACEHOLDER_HOST }
+    val configuredRelayToken = remember { RelayConfig.PLACEHOLDER_TOKEN }
     LaunchedEffect(Unit) {
-        val relayHost = if (isEmulator) "127.0.0.1:8888" else "172.23.127.184:8888"
-        val defaultRelayUrl = "ws://$relayHost/ws?token=masmufid_super_secret_relay_2026&session_id=mac-live-session&role=client"
+        val relayHost = if (isEmulator) "127.0.0.1:8888" else configuredRelayHost
+        val defaultRelayUrl = RelayConfig.wsUrl(relayHost, configuredRelayToken, "mac-live-session")
         connectionManager.connectSession("mac-live-session", defaultRelayUrl)
     }
 
@@ -188,7 +195,9 @@ fun TerminalMirrorApp(
         }
 
         val baseRelay = if (isEmulator) {
-            payload.relayUrl.replace("172.23.127.184:8888", "127.0.0.1:8888")
+            payload.relayUrl
+                .replace(RelayConfig.PLACEHOLDER_HOST, "127.0.0.1:8888")
+                .replace("10.0.2.2:8888", "127.0.0.1:8888")
         } else {
             payload.relayUrl
         }
@@ -207,25 +216,18 @@ fun TerminalMirrorApp(
         }
     }
 
-    // Helper to send keystroke upstream
+    // Helper to send keystroke upstream. Bare CTRL/ALT are modifiers and
+    // must never be sent as literal text (returns null -> ignored + hint).
     val sendKeystroke: (String) -> Unit = { rawString ->
         if (activeSession != null) {
-            val bytes = when (rawString) {
-                "ENTER", "\r", "\n" -> "\r".toByteArray(Charsets.UTF_8)
-                "TAB", "\t" -> "\t".toByteArray(Charsets.UTF_8)
-                "ESC" -> "\u001b".toByteArray(Charsets.UTF_8)
-                "CTRL+C" -> byteArrayOf(0x03)
-                "CTRL+D" -> byteArrayOf(0x04)
-                "CTRL+Z" -> byteArrayOf(0x1A)
-                "UP" -> "\u001b[A".toByteArray(Charsets.UTF_8)
-                "DOWN" -> "\u001b[B".toByteArray(Charsets.UTF_8)
-                "LEFT" -> "\u001b[D".toByteArray(Charsets.UTF_8)
-                "RIGHT" -> "\u001b[C".toByteArray(Charsets.UTF_8)
-                else -> rawString.toByteArray(Charsets.UTF_8)
+            val bytes = KeystrokeEncoder.encode(rawString)
+            if (bytes == null) {
+                onShowToast("Hold CTRL/ALT with another key (modifier only)")
+            } else {
+                val seq = sequenceCounter.incrementAndGet()
+                val packet = codec.value.encodeKeystroke(activeSession.sessionId, seq, bytes)
+                connectionManager.sendToSession(activeSession.sessionId, packet)
             }
-            val seq = sequenceCounter.incrementAndGet()
-            val packet = codec.value.encodeKeystroke(activeSession.sessionId, seq, bytes)
-            connectionManager.sendToSession(activeSession.sessionId, packet)
         }
     }
 
@@ -250,9 +252,11 @@ fun TerminalMirrorApp(
                     activeSession?.let { session ->
                         screenBuffers[session.sessionId]?.clear()
                         terminalBuffers[session.sessionId] = ""
-                        val defaultRelayUrl = "ws://172.23.127.184:8888/ws?token=masmufid_super_secret_relay_2026&session_id=${session.sessionId}&role=client"
+                        val relayHost = if (isEmulator) "127.0.0.1:8888" else configuredRelayHost
+                        val defaultRelayUrl =
+                            RelayConfig.wsUrl(relayHost, configuredRelayToken, session.sessionId)
                         connectionManager.connectSession(session.sessionId, defaultRelayUrl)
-                        onShowToast("Menyambung ulang ${session.hostId}...")
+                        onShowToast("Reconnecting ${session.hostId}...")
                     }
                 }
             )
@@ -360,20 +364,13 @@ fun TerminalMirrorApp(
 }
 
 private fun buildInitialBanner(session: TerminalSession?, isReadOnly: Boolean): String {
-    val statusText = if (session?.isConnected == true) "CONNECTED (Realtime Stream Active)" else "CONNECTING to VPS Relay (172.23.127.184:8888)..."
-    val lockText = if (isReadOnly) "LOCKED (Read-Only Mode)" else "UNLOCKED (Interactive Remote Keystrokes Active)"
-    return """
-        ┌────────────────────────────────────────────────────────┐
-        │  Terminal Mirror - Android Client (API 35)             │
-        │  Target Host  : ${session?.hostName?.padEnd(39)}│
-        │  Session ID   : ${session?.sessionId?.padEnd(39)}│
-        │  Relay VPS    : 172.23.127.184:8888                    │
-        │  Status       : ${statusText.padEnd(39)}│
-        │  Mode         : ${lockText.padEnd(39)}│
-        └────────────────────────────────────────────────────────┘
-        
-        Waiting for Darwin PTY shell frames...
-    """.trimIndent()
+    return TerminalUiHelpers.bannerLines(
+        hostName = session?.hostName,
+        sessionId = session?.sessionId,
+        relayLabel = RelayConfig.PLACEHOLDER_HOST,
+        isConnected = session?.isConnected == true,
+        isReadOnly = isReadOnly
+    ).joinToString("\n")
 }
 
 /**

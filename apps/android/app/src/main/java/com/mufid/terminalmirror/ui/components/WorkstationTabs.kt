@@ -6,13 +6,14 @@ import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.LaptopWindows
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mufid.terminalmirror.model.OsType
@@ -25,10 +26,11 @@ fun WorkstationTabs(
     onTabSelected: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    TabRow(
+    ScrollableTabRow(
         selectedTabIndex = selectedTabIndex,
         containerColor = Color(0xFF202020),
         contentColor = Color.White,
+        edgePadding = 16.dp,
         modifier = modifier
     ) {
         sessions.forEachIndexed { index, session ->
@@ -56,6 +58,7 @@ fun WorkstationTabs(
                             text = session.hostName,
                             fontSize = 12.sp,
                             maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                             color = if (selectedTabIndex == index) Color.White else Color(0xFFAAAAAA)
                         )
                     }
