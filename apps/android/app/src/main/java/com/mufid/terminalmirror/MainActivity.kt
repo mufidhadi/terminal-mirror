@@ -36,8 +36,8 @@ import com.mufid.terminalmirror.terminal.TerminalBufferProcessor
 import com.mufid.terminalmirror.terminal.TerminalScreenBuffer
 import com.mufid.terminalmirror.ui.KeystrokeEncoder
 import com.mufid.terminalmirror.ui.RelayConfig
-import com.mufid.terminalmirror.ui.TerminalUiHelpers
 import com.mufid.terminalmirror.ui.components.AccessoryBar
+import com.mufid.terminalmirror.ui.components.ConnectionStatusCard
 import com.mufid.terminalmirror.ui.components.QrScannerDialog
 import com.mufid.terminalmirror.ui.components.StatusHeader
 import com.mufid.terminalmirror.ui.components.WorkstationTabs
@@ -291,20 +291,26 @@ fun TerminalMirrorApp(
                     .verticalScroll(scrollState)
             ) {
                 val currentText = activeSession?.let { terminalBuffers[it.sessionId] } ?: ""
-                val displayText = if (currentText.isBlank()) {
-                    buildInitialBanner(activeSession, isReadOnly)
+                if (currentText.isBlank()) {
+                    // Structured empty-state: fluid rows, no fixed-width ASCII
+                    // box, nothing to wrap or overflow on narrow viewports.
+                    ConnectionStatusCard(
+                        hostName = activeSession?.hostName,
+                        sessionId = activeSession?.sessionId,
+                        relayLabel = RelayConfig.PLACEHOLDER_HOST,
+                        isConnected = activeSession?.isConnected == true,
+                        isReadOnly = isReadOnly
+                    )
                 } else {
-                    currentText
+                    Text(
+                        text = currentText,
+                        color = Color(0xFF58A6FF),
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 12.sp,
+                        lineHeight = 16.sp,
+                        modifier = Modifier.padding(10.dp)
+                    )
                 }
-
-                Text(
-                    text = displayText,
-                    color = Color(0xFF58A6FF),
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 12.sp,
-                    lineHeight = 16.sp,
-                    modifier = Modifier.padding(10.dp)
-                )
             }
 
             // Quick Command Input Field
@@ -362,16 +368,6 @@ fun TerminalMirrorApp(
             }
         }
     }
-}
-
-private fun buildInitialBanner(session: TerminalSession?, isReadOnly: Boolean): String {
-    return TerminalUiHelpers.bannerLines(
-        hostName = session?.hostName,
-        sessionId = session?.sessionId,
-        relayLabel = RelayConfig.PLACEHOLDER_HOST,
-        isConnected = session?.isConnected == true,
-        isReadOnly = isReadOnly
-    ).joinToString("\n")
 }
 
 /**

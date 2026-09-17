@@ -31,6 +31,12 @@ object TerminalUiHelpers {
         return host.take(maxChars - 1).trimEnd() + "…"
     }
 
+    fun statusLabel(isConnected: Boolean): String =
+        if (isConnected) "CONNECTED" else "CONNECTING"
+
+    fun modeLabel(isReadOnly: Boolean): String =
+        if (isReadOnly) "LOCKED (Read-Only)" else "UNLOCKED (Interactive)"
+
     /**
      * Viewport-safe status lines. Deliberately avoids fixed-width ASCII box
      * drawing (which wraps and breaks on ~360dp phone viewports) and never
@@ -44,8 +50,8 @@ object TerminalUiHelpers {
         isConnected: Boolean,
         isReadOnly: Boolean
     ): List<String> {
-        val status = if (isConnected) "CONNECTED" else "CONNECTING"
-        val mode = if (isReadOnly) "LOCKED (Read-Only)" else "UNLOCKED (Interactive)"
+        val status = statusLabel(isConnected)
+        val mode = modeLabel(isReadOnly)
         return listOf(
             "Terminal Mirror — Android Client",
             "Host: ${hostName?.trim().orEmpty().ifEmpty { "Unknown host" }}",

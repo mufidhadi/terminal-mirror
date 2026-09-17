@@ -101,6 +101,14 @@ class TerminalUiHelpersTest {
     }
 
     @Test
+    fun `status and mode labels are distinct per state`() {
+        assertEquals("CONNECTED", TerminalUiHelpers.statusLabel(true))
+        assertEquals("CONNECTING", TerminalUiHelpers.statusLabel(false))
+        assertEquals("LOCKED (Read-Only)", TerminalUiHelpers.modeLabel(true))
+        assertEquals("UNLOCKED (Interactive)", TerminalUiHelpers.modeLabel(false))
+    }
+
+    @Test
     fun `relay url builder rejects blank secrets`() {
         try {
             RelayConfig.wsUrl("relay.example.internal:8888", "", "mac-live-session")
