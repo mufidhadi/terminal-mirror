@@ -51,6 +51,7 @@
    - [x] Darwin PTY session spawner (`/bin/zsh -l`) via `portable-pty`.
    - [x] Resilient auto-reconnecting WebSocket client with exponential backoff (`RelayHostClient`).
    - [x] Ambient startup banner with ASCII art, Diceware passphrase, and Unicode QR code.
+   - [x] Compact side-by-side QR banner (20 lines total height, fits standard 80x24 terminal) using `tm://` URI scheme.
    - [x] Zero-Knowledge ChaCha20-Poly1305 encryption integrated directly into the live PTY stream.
    - [x] CLI flags for `--no-e2ee`, `--session-id`, and `--passphrase`.
 
@@ -67,15 +68,19 @@
    - [x] Foreground Service with partial WakeLock for Doze Mode survival (`TerminalMirrorService.kt`).
    - [x] Hardware KeyStore manager (`KeystoreManager.kt`).
    - [x] Stateful terminal stream buffer processor handling ZLE backspaces and CRLF (`TerminalBufferProcessor.kt`).
+   - [x] High-performance 2D character matrix screen buffer (`TerminalScreenBuffer.kt`) supporting ANSI CSI cursor addressing, line/screen erasures (`2J`, `2K`), and alternate screen buffer (`?1049`).
+   - [x] Compact pairing URI scheme (`tm://`) parser and deep-link intent filter support.
+   - [x] R8 ProGuard minification & `arm64-v8a` ABI optimization reducing APK size by 79% (37.4 MB to 7.9 MB).
 
 7. **CI/CD Automation Pipelines (`.github/workflows/`)**:
    - [x] Android CI (`android-ci.yml`): Automated debug APK build with Gradle 8.7, JDK 17, Android SDK 34, and artifact upload.
    - [x] Rust CI (`rust-ci.yml`): Multiplatform matrix test (Linux, macOS, Windows).
 
 8. **Automated Verification Suites**:
-   - [x] 33 Rust tests passing 100% (`cargo test --workspace`).
+   - [x] 34 Rust tests passing 100% (`cargo test --workspace`).
    - [x] 6 Python live VPS integration tests passing (`uv run pytest`), validating real Darwin `/bin/zsh` execution over ZeroTier.
-   - [x] 7 Android unit tests passing (`./gradlew testDebugUnitTest`).
+   - [x] 17 Android unit tests passing (`./gradlew testDebugUnitTest`).
+   - [x] Live TUI benchmark animation suite (`tests/tui_spinner_demo.py`) verified with zero duplicate stacked lines.
 
 ---
 

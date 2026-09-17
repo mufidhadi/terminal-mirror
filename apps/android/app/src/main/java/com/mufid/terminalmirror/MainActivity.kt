@@ -26,12 +26,14 @@ import androidx.compose.ui.unit.sp
 import com.mufid.terminalmirror.crypto.E2eeManager
 import com.mufid.terminalmirror.model.OsType
 import com.mufid.terminalmirror.model.PairingPayload
+import com.mufid.terminalmirror.model.PairingPayloadParser
 import com.mufid.terminalmirror.model.TerminalSession
 import com.mufid.terminalmirror.network.ConnectionManager
 import com.mufid.terminalmirror.network.DecodedPayload
 import com.mufid.terminalmirror.network.ProtocolCodec
 import com.mufid.terminalmirror.service.TerminalMirrorService
 import com.mufid.terminalmirror.terminal.TerminalBufferProcessor
+import com.mufid.terminalmirror.terminal.TerminalScreenBuffer
 import com.mufid.terminalmirror.ui.components.AccessoryBar
 import com.mufid.terminalmirror.ui.components.QrScannerDialog
 import com.mufid.terminalmirror.ui.components.StatusHeader
@@ -43,8 +45,12 @@ import java.util.concurrent.atomic.AtomicLong
 
 class MainActivity : ComponentActivity() {
 
+    private val pendingPairingUri = mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        pendingPairingUri.value = intent?.dataString
 
         // Start Foreground Service to keep streaming alive through Doze Mode
         val serviceIntent = Intent(this, TerminalMirrorService::class.java).apply {
@@ -54,16 +60,23 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             TerminalMirrorApp(
+                pendingPairingUri = pendingPairingUri,
                 onShowToast = { msg ->
                     Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
                 }
             )
         }
     }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        pendingPairingUri.value = intent.dataString
+    }
 }
 
 @Composable
 fun TerminalMirrorApp(
+    pendingPairingUri: State<String?>,
     onShowToast: (String) -> Unit
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -75,7 +88,15 @@ fun TerminalMirrorApp(
 
     val sequenceCounter = remember { AtomicLong(1000) }
 
-    // Live terminal buffers keyed by sessionId
+    val isEmulator = remember {
+        android.os.Build.FINGERPRINT.contains("generic") ||
+        android.os.Build.FINGERPRINT.contains("sdk_gphone") ||
+        android.os.Build.HARDWARE.contains("goldfish") ||
+        android.os.Build.HARDWARE.contains("ranchu")
+    }
+
+    // Terminal 2D Screen Matrix buffers keyed by sessionId
+    val screenBuffers = remember { mutableMapOf<String, TerminalScreenBuffer>() }
     val terminalBuffers = remember { mutableStateMapOf<String, String>() }
 
     // E2EE manager and protocol codec (defaults to standard passphrase)
@@ -118,9 +139,11 @@ fun TerminalMirrorApp(
             onSessionPayload = { sessionId, bytes ->
                 val decoded = codec.value.decodePacket(bytes)
                 if (decoded is DecodedPayload.TerminalOutput) {
-                    val current = terminalBuffers.getOrDefault(sessionId, "")
-                    val updated = TerminalBufferProcessor.processChunk(current, decoded.text)
-                    terminalBuffers[sessionId] = updated
+                    val screenBuffer = screenBuffers.getOrPut(sessionId) {
+                        TerminalScreenBuffer(cols = 80, rows = 24)
+                    }
+                    screenBuffer.processChunk(decoded.text)
+                    terminalBuffers[sessionId] = screenBuffer.renderScreen()
                 }
             },
             onSessionStatusChanged = { sessionId, isConnected ->
@@ -134,8 +157,54 @@ fun TerminalMirrorApp(
 
     // Auto-connect to default live session on launch
     LaunchedEffect(Unit) {
-        val defaultRelayUrl = "ws://172.23.127.184:8888/ws?token=masmufid_super_secret_relay_2026&session_id=mac-live-session&role=client"
+        val relayHost = if (isEmulator) "127.0.0.1:8888" else "172.23.127.184:8888"
+        val defaultRelayUrl = "ws://$relayHost/ws?token=masmufid_super_secret_relay_2026&session_id=mac-live-session&role=client"
         connectionManager.connectSession("mac-live-session", defaultRelayUrl)
+    }
+
+    // Helper to connect a parsed PairingPayload
+    val connectPairingPayload: (PairingPayload) -> Unit = { payload ->
+        val secret = payload.getFormattedPassphrase() ?: payload.preSharedKey
+        if (secret.isNotBlank()) {
+            e2eeCipher.value = E2eeManager.fromSecret(secret)
+        }
+
+        val newSession = TerminalSession(
+            sessionId = payload.sessionId,
+            hostId = payload.hostId,
+            hostName = "${payload.hostId} (paired)",
+            osType = if (payload.hostId.contains("win", ignoreCase = true)) OsType.WINDOWS else OsType.MACOS,
+            shell = "remote-pty",
+            isConnected = false,
+            isReadOnly = false
+        )
+        val existingIndex = sessions.indexOfFirst { it.sessionId == payload.sessionId }
+        if (existingIndex >= 0) {
+            sessions[existingIndex] = newSession
+            selectedTabIndex = existingIndex
+        } else {
+            sessions.add(newSession)
+            selectedTabIndex = sessions.size - 1
+        }
+
+        val baseRelay = if (isEmulator) {
+            payload.relayUrl.replace("172.23.127.184:8888", "127.0.0.1:8888")
+        } else {
+            payload.relayUrl
+        }
+        val separator = if (baseRelay.contains('?')) "&" else "?"
+        val fullUrl = "${baseRelay}${separator}token=${payload.preSharedKey}&session_id=${payload.sessionId}&role=client"
+        connectionManager.connectSession(payload.sessionId, fullUrl)
+        onShowToast("Paired with ${payload.hostId} (${payload.sessionId})")
+    }
+
+    // Handle deep-link / intent delivered pairing URI
+    LaunchedEffect(pendingPairingUri.value) {
+        val uri = pendingPairingUri.value ?: return@LaunchedEffect
+        val payload = PairingPayloadParser.parse(uri)
+        if (payload != null) {
+            connectPairingPayload(payload)
+        }
     }
 
     // Helper to send keystroke upstream
@@ -165,33 +234,7 @@ fun TerminalMirrorApp(
             onDismiss = { showScannerDialog = false },
             onPayloadScanned = { payload ->
                 showScannerDialog = false
-                val secret = payload.getFormattedPassphrase() ?: payload.preSharedKey
-                if (secret.isNotBlank()) {
-                    e2eeCipher.value = E2eeManager.fromSecret(secret)
-                }
-
-                val newSession = TerminalSession(
-                    sessionId = payload.sessionId,
-                    hostId = payload.hostId,
-                    hostName = "${payload.hostId} (paired)",
-                    osType = if (payload.hostId.contains("win", ignoreCase = true)) OsType.WINDOWS else OsType.MACOS,
-                    shell = "remote-pty",
-                    isConnected = false,
-                    isReadOnly = false
-                )
-                val existingIndex = sessions.indexOfFirst { it.sessionId == payload.sessionId }
-                if (existingIndex >= 0) {
-                    sessions[existingIndex] = newSession
-                    selectedTabIndex = existingIndex
-                } else {
-                    sessions.add(newSession)
-                    selectedTabIndex = sessions.size - 1
-                }
-
-                val separator = if (payload.relayUrl.contains('?')) "&" else "?"
-                val fullUrl = "${payload.relayUrl}${separator}token=${payload.preSharedKey}&session_id=${payload.sessionId}&role=client"
-                connectionManager.connectSession(payload.sessionId, fullUrl)
-                onShowToast("Paired with ${payload.hostId} (${payload.sessionId})")
+                connectPairingPayload(payload)
             }
         )
     }
@@ -205,6 +248,8 @@ fun TerminalMirrorApp(
                 onOpenScanner = { showScannerDialog = true },
                 onReconnect = {
                     activeSession?.let { session ->
+                        screenBuffers[session.sessionId]?.clear()
+                        terminalBuffers[session.sessionId] = ""
                         val defaultRelayUrl = "ws://172.23.127.184:8888/ws?token=masmufid_super_secret_relay_2026&session_id=${session.sessionId}&role=client"
                         connectionManager.connectSession(session.sessionId, defaultRelayUrl)
                         onShowToast("Menyambung ulang ${session.hostId}...")

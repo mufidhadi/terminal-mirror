@@ -15,6 +15,21 @@ android {
         versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        ndk {
+            abiFilters += listOf("arm64-v8a")
+        }
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            signingConfig = signingConfigs.getByName("debug")
+        }
     }
 
     buildFeatures {
@@ -70,4 +85,5 @@ dependencies {
 
     // Unit Testing
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 }

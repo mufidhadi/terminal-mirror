@@ -154,14 +154,12 @@ fun QrScannerDialog(
                                             scanner.process(image)
                                                 .addOnSuccessListener { barcodes ->
                                                     for (barcode in barcodes) {
-                                                        if (barcode.valueType == Barcode.TYPE_TEXT || barcode.rawValue != null) {
-                                                            val raw = barcode.rawValue ?: continue
-                                                            val payload = parsePairingPayload(raw)
-                                                            if (payload != null && !isScanned) {
-                                                                isScanned = true
-                                                                onPayloadScanned(payload)
-                                                                break
-                                                            }
+                                                        val raw = barcode.rawValue ?: continue
+                                                        val payload = com.mufid.terminalmirror.model.PairingPayloadParser.parse(raw)
+                                                        if (payload != null && !isScanned) {
+                                                            isScanned = true
+                                                            onPayloadScanned(payload)
+                                                            break
                                                         }
                                                     }
                                                 }
@@ -238,36 +236,5 @@ fun QrScannerDialog(
  * Parses JSON pairing payload emitted by the Mac/Windows terminal startup banner.
  */
 private fun parsePairingPayload(rawJson: String): PairingPayload? {
-    return try {
-        val json = JSONObject(rawJson)
-        val relayUrl = json.getString("relay_url")
-        val sessionId = json.getString("session_id")
-        val hostId = json.optString("host_id", "unknown-host")
-        val psk = json.optString("pre_shared_key", "")
-        val pubKey = json.optString("public_key", "")
-        val pin = if (json.has("pin_code") && !json.isNull("pin_code")) json.getString("pin_code") else null
-
-        val passphraseList = mutableListOf<String>()
-        if (json.has("passphrase_words") && !json.isNull("passphrase_words")) {
-            val arr = json.getJSONArray("passphrase_words")
-            for (i in 0 until arr.length()) {
-                passphraseList.add(arr.getString(i))
-            }
-        }
-
-        val expiresAt = json.optLong("expires_at_ms", 0L)
-
-        PairingPayload(
-            relayUrl = relayUrl,
-            sessionId = sessionId,
-            hostId = hostId,
-            preSharedKey = psk,
-            publicKey = pubKey,
-            pinCode = pin,
-            passphraseWords = if (passphraseList.isNotEmpty()) passphraseList else null,
-            expiresAtMs = expiresAt
-        )
-    } catch (e: Exception) {
-        null
-    }
+    return com.mufid.terminalmirror.model.PairingPayloadParser.parse(rawJson)
 }

@@ -113,18 +113,95 @@ pub struct PairingPayload {
     pub session_id: String,
     pub host_id: String,
     pub pre_shared_key: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub public_key: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pin_code: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub passphrase_words: Option<Vec<String>>,
     pub expires_at_ms: u64,
 }
 
 impl PairingPayload {
+    pub fn to_compact_uri(&self) -> String {
+        let clean_relay = self.relay_url
+            .trim_start_matches("ws://")
+            .trim_start_matches("wss://")
+            .trim_start_matches("http://")
+            .trim_start_matches("https://");
+        let mut uri = format!("tm://{}?s={}&k={}", clean_relay, self.session_id, self.pre_shared_key);
+        if let Some(p) = self.formatted_passphrase() {
+            uri.push_str("&p=");
+            uri.push_str(&p);
+        }
+        if !self.host_id.is_empty() && self.host_id != "unknown-host" && self.host_id != "macbook-pro" {
+            uri.push_str(&format!("&h={}", self.host_id));
+        }
+        if !self.public_key.is_empty() {
+            uri.push_str(&format!("&pub={}", self.public_key));
+        }
+        if let Some(pin) = &self.pin_code {
+            uri.push_str(&format!("&pin={}", pin));
+        }
+        if self.expires_at_ms > 0 {
+            uri.push_str(&format!("&exp={}", self.expires_at_ms));
+        }
+        uri
+    }
+
     pub fn to_qr_string(&self) -> Result<String, serde_json::Error> {
-        serde_json::to_string(self)
+        Ok(self.to_compact_uri())
     }
 
     pub fn from_qr_string(s: &str) -> Result<Self, serde_json::Error> {
+        if let Some(stripped) = s.strip_prefix("tm://") {
+            let mut parts = stripped.splitn(2, '?');
+            let host_path = parts.next().unwrap_or_default();
+            let query = parts.next().unwrap_or_default();
+
+            let relay_url = if host_path.starts_with("127.0.0.1") || host_path.starts_with("172.") || host_path.starts_with("192.") || host_path.starts_with("10.") {
+                format!("ws://{}", host_path)
+            } else {
+                format!("wss://{}", host_path)
+            };
+
+            let mut session_id = String::new();
+            let mut host_id = "macbook-pro".to_string();
+            let mut pre_shared_key = String::new();
+            let mut public_key = String::new();
+            let mut pin_code = None;
+            let mut passphrase_words = None;
+            let mut expires_at_ms = 0u64;
+
+            for param in query.split('&') {
+                if let Some((k, v)) = param.split_once('=') {
+                    match k {
+                        "s" => session_id = v.to_string(),
+                        "h" => host_id = v.to_string(),
+                        "k" => pre_shared_key = v.to_string(),
+                        "pub" => public_key = v.to_string(),
+                        "pin" => pin_code = Some(v.to_string()),
+                        "p" => {
+                            let words: Vec<String> = v.split('-').map(|w| w.to_string()).collect();
+                            passphrase_words = Some(words);
+                        }
+                        "exp" => expires_at_ms = v.parse().unwrap_or_default(),
+                        _ => {}
+                    }
+                }
+            }
+
+            return Ok(PairingPayload {
+                relay_url,
+                session_id,
+                host_id,
+                pre_shared_key,
+                public_key,
+                pin_code,
+                passphrase_words,
+                expires_at_ms,
+            });
+        }
         serde_json::from_str(s)
     }
 
