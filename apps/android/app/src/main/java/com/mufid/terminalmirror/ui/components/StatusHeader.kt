@@ -11,12 +11,12 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mufid.terminalmirror.model.TerminalSession
 import com.mufid.terminalmirror.ui.TerminalUiHelpers
+import com.mufid.terminalmirror.ui.theme.TerminalColors
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -36,7 +36,7 @@ fun StatusHeader(
                 Text(
                     text = "Terminal Mirror",
                     fontSize = 17.sp,
-                    color = Color.White,
+                    color = TerminalColors.PrimaryText,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -47,7 +47,7 @@ fun StatusHeader(
                             activeSession.shell
                         ),
                         fontSize = 11.sp,
-                        color = Color(0xFFAAAAAA),
+                        color = TerminalColors.SubtitleText,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -60,7 +60,7 @@ fun StatusHeader(
                 modifier = Modifier
                     .padding(end = 4.dp)
                     .background(
-                        color = if (activeSession?.isConnected == true) Color(0xFF1B5E20) else Color(0xFFB71C1C),
+                        color = if (activeSession?.isConnected == true) TerminalColors.Live else TerminalColors.Offline,
                         shape = RoundedCornerShape(12.dp)
                     )
                     .padding(horizontal = 8.dp, vertical = 3.dp)
@@ -68,7 +68,7 @@ fun StatusHeader(
                 Text(
                     text = if (activeSession?.isConnected == true) "● LIVE" else "○ OFFLINE",
                     fontSize = 10.sp,
-                    color = Color.White
+                    color = TerminalColors.PrimaryText
                 )
             }
 
@@ -77,7 +77,7 @@ fun StatusHeader(
                 Icon(
                     imageVector = Icons.Default.QrCodeScanner,
                     contentDescription = "Scan Terminal QR Code",
-                    tint = Color(0xFF58A6FF)
+                    tint = TerminalColors.Accent
                 )
             }
 
@@ -86,7 +86,7 @@ fun StatusHeader(
                 Icon(
                     imageVector = Icons.Default.Refresh,
                     contentDescription = "Reconnect Terminal Session",
-                    tint = Color(0xFF64B5F6)
+                    tint = TerminalColors.AccentLight
                 )
             }
 
@@ -95,13 +95,13 @@ fun StatusHeader(
                 Icon(
                     imageVector = if (isReadOnly) Icons.Default.Lock else Icons.Default.LockOpen,
                     contentDescription = if (isReadOnly) "Read-Only Active" else "Input Enabled",
-                    tint = if (isReadOnly) Color(0xFF4CAF50) else Color(0xFFFF5722)
+                    tint = if (isReadOnly) TerminalColors.LiveBright else TerminalColors.Unlocked
                 )
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = Color(0xFF181818),
-            titleContentColor = Color.White
+            containerColor = TerminalColors.TopBarBackground,
+            titleContentColor = TerminalColors.PrimaryText
         ),
         modifier = modifier
     )

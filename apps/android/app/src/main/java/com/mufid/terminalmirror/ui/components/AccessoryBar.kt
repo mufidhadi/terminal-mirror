@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.mufid.terminalmirror.ui.theme.TerminalColors
 
 @Composable
 fun AccessoryBar(
@@ -28,7 +29,7 @@ fun AccessoryBar(
     LazyRow(
         modifier = modifier
             .fillMaxWidth()
-            .background(Color(0xFF242424))
+            .background(TerminalColors.AccessoryBackground)
             .padding(horizontal = 4.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         contentPadding = PaddingValues(horizontal = 4.dp)
@@ -38,8 +39,8 @@ fun AccessoryBar(
                 onClick = { onKeyPress(key) },
                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF383838),
-                    contentColor = Color.White
+                    containerColor = TerminalColors.AccessoryButton,
+                    contentColor = TerminalColors.PrimaryText
                 ),
                 modifier = Modifier
                     .widthIn(min = 56.dp)
@@ -60,8 +61,8 @@ fun AccessoryBar(
                 onClick = onEmergencyKill,
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFFB71C1C),
-                    contentColor = Color.White
+                    containerColor = TerminalColors.Kill,
+                    contentColor = TerminalColors.PrimaryText
                 ),
                 modifier = Modifier
                     .widthIn(min = 72.dp)
@@ -84,8 +85,8 @@ fun AccessoryBar(
                 onClick = onDisconnect,
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF3A3325),
-                    contentColor = Color(0xFFFFB74D)
+                    containerColor = TerminalColors.WarningBackground,
+                    contentColor = TerminalColors.Warning
                 ),
                 modifier = Modifier
                     .widthIn(min = 72.dp)

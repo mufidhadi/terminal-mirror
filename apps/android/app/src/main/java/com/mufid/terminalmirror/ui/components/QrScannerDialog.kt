@@ -29,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.mufid.terminalmirror.ui.theme.TerminalColors
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -77,8 +78,8 @@ fun QrScannerDialog(
         Surface(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFF0D1117)),
-            color = Color(0xFF0D1117)
+                .background(TerminalColors.ViewportBackground),
+            color = TerminalColors.ViewportBackground
         ) {
             Column(
                 modifier = Modifier.fillMaxSize(),
@@ -96,13 +97,13 @@ fun QrScannerDialog(
                         Icon(
                             imageVector = Icons.Default.QrCodeScanner,
                             contentDescription = "QR Scanner",
-                            tint = Color(0xFF58A6FF),
+                            tint = TerminalColors.Accent,
                             modifier = Modifier.size(24.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "Scan Terminal QR Code",
-                            color = Color.White,
+                            color = TerminalColors.PrimaryText,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -111,7 +112,7 @@ fun QrScannerDialog(
                         Icon(
                             imageVector = Icons.Default.Close,
                             contentDescription = "Close",
-                            tint = Color.Gray
+                            tint = TerminalColors.MutedText
                         )
                     }
                 }
@@ -193,13 +194,13 @@ fun QrScannerDialog(
                         Box(
                             modifier = Modifier
                                 .size(260.dp)
-                                .border(2.dp, Color(0xFF58A6FF), RoundedCornerShape(16.dp))
+                                .border(2.dp, TerminalColors.Accent, RoundedCornerShape(16.dp))
                         )
                     }
 
                     Text(
                         text = "Align camera with the QR code printed in your Mac or Windows terminal.",
-                        color = Color.LightGray,
+                        color = TerminalColors.SubtitleText,
                         fontSize = 14.sp,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.padding(bottom = 24.dp, start = 24.dp, end = 24.dp)
@@ -214,13 +215,13 @@ fun QrScannerDialog(
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
                                 text = "Camera permission is required to scan QR pairing codes.",
-                                color = Color.Gray,
+                                color = TerminalColors.MutedText,
                                 textAlign = TextAlign.Center,
                                 modifier = Modifier.padding(16.dp)
                             )
                             Button(
                                 onClick = { permissionLauncher.launch(Manifest.permission.CAMERA) },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF238636))
+                                colors = ButtonDefaults.buttonColors(containerColor = TerminalColors.Send)
                             ) {
                                 Text("Grant Permission")
                             }

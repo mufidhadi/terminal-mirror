@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.mufid.terminalmirror.ui.theme.TerminalColors
 import com.mufid.terminalmirror.model.OsType
 import com.mufid.terminalmirror.model.TerminalSession
 import com.mufid.terminalmirror.ui.TerminalUiHelpers
@@ -29,8 +30,8 @@ fun WorkstationTabs(
 ) {
     ScrollableTabRow(
         selectedTabIndex = selectedTabIndex,
-        containerColor = Color(0xFF202020),
-        contentColor = Color.White,
+        containerColor = TerminalColors.TabBackground,
+        contentColor = TerminalColors.PrimaryText,
         edgePadding = 16.dp,
         modifier = modifier
     ) {
@@ -52,7 +53,7 @@ fun WorkstationTabs(
                             imageVector = icon,
                             contentDescription = null,
                             modifier = Modifier.size(16.dp),
-                            tint = if (selectedTabIndex == index) Color(0xFF64B5F6) else Color(0xFF888888)
+                            tint = if (selectedTabIndex == index) TerminalColors.AccentLight else TerminalColors.TabInactive
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
@@ -60,7 +61,7 @@ fun WorkstationTabs(
                             fontSize = 12.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            color = if (selectedTabIndex == index) Color.White else Color(0xFFAAAAAA)
+                            color = if (selectedTabIndex == index) TerminalColors.PrimaryText else TerminalColors.SubtitleText
                         )
                     }
                 }

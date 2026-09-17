@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.mufid.terminalmirror.ui.theme.TerminalColors
 import com.mufid.terminalmirror.ui.RelayConfig
 import com.mufid.terminalmirror.ui.TerminalUiHelpers
 
@@ -42,7 +43,7 @@ fun ConnectionStatusCard(
     isReadOnly: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val statusColor = if (isConnected) Color(0xFF4CAF50) else Color(0xFFFFB74D)
+    val statusColor = if (isConnected) TerminalColors.LiveBright else TerminalColors.Warning
     val relay = relayLabel.trim().ifEmpty { RelayConfig.PLACEHOLDER_HOST }
 
     Card(
@@ -50,7 +51,7 @@ fun ConnectionStatusCard(
             .fillMaxWidth()
             .padding(12.dp),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF161B22))
+        colors = CardDefaults.cardColors(containerColor = TerminalColors.CardBackground)
     ) {
         Column(
             modifier = Modifier
@@ -67,7 +68,7 @@ fun ConnectionStatusCard(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = "Terminal Mirror — Android Client",
-                    color = Color.White,
+                    color = TerminalColors.PrimaryText,
                     fontSize = 13.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -87,7 +88,7 @@ fun ConnectionStatusCard(
             Text(
                 text = if (isConnected) "Streaming live PTY frames…"
                 else "Waiting for PTY frames…",
-                color = Color(0xFF8B949E),
+                color = TerminalColors.MutedText,
                 fontSize = 12.sp,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
@@ -100,7 +101,7 @@ fun ConnectionStatusCard(
 private fun StatusRow(
     label: String,
     value: String,
-    valueColor: Color = Color(0xFF58A6FF)
+    valueColor: Color = TerminalColors.TerminalText
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -108,7 +109,7 @@ private fun StatusRow(
     ) {
         Text(
             text = label,
-            color = Color(0xFF8B949E),
+            color = TerminalColors.MutedText,
             fontSize = 11.sp,
             modifier = Modifier.width(64.dp),
             maxLines = 1,

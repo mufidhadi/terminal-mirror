@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.mufid.terminalmirror.ui.theme.TerminalColors
 import com.mufid.terminalmirror.crypto.E2eeManager
 import com.mufid.terminalmirror.model.OsType
 import com.mufid.terminalmirror.model.PairingPayload
@@ -264,7 +265,7 @@ fun TerminalMirrorApp(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .background(Color(0xFF121212))
+                .background(TerminalColors.ScreenBackground)
         ) {
             // Workstation Tabs (Mac / Windows / Linux)
             WorkstationTabs(
@@ -284,7 +285,7 @@ fun TerminalMirrorApp(
                     .weight(1f)
                     .fillMaxWidth()
                     .padding(6.dp)
-                    .background(Color(0xFF0D1117))
+                    .background(TerminalColors.ViewportBackground)
                     .verticalScroll(scrollState)
             ) {
                 val currentText = activeSession?.let { terminalBuffers[it.sessionId] } ?: ""
@@ -301,7 +302,7 @@ fun TerminalMirrorApp(
                 } else {
                     Text(
                         text = currentText,
-                        color = Color(0xFF58A6FF),
+                        color = TerminalColors.TerminalText,
                         fontFamily = FontFamily.Monospace,
                         fontSize = 12.sp,
                         lineHeight = 16.sp,
@@ -325,10 +326,10 @@ fun TerminalMirrorApp(
                         modifier = Modifier.weight(1f),
                         singleLine = true,
                         colors = TextFieldDefaults.colors(
-                            focusedContainerColor = Color(0xFF1F242C),
-                            unfocusedContainerColor = Color(0xFF1F242C),
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White
+                            focusedContainerColor = TerminalColors.InputBackground,
+                            unfocusedContainerColor = TerminalColors.InputBackground,
+                            focusedTextColor = TerminalColors.PrimaryText,
+                            unfocusedTextColor = TerminalColors.PrimaryText
                         ),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                         keyboardActions = KeyboardActions(onSend = {
@@ -348,9 +349,9 @@ fun TerminalMirrorApp(
                                 keyboardController?.hide()
                             }
                         },
-                        colors = IconButtonDefaults.iconButtonColors(containerColor = Color(0xFF238636))
+                        colors = IconButtonDefaults.iconButtonColors(containerColor = TerminalColors.Send)
                     ) {
-                        Icon(Icons.Default.Send, contentDescription = "Send", tint = Color.White)
+                        Icon(Icons.Default.Send, contentDescription = "Send", tint = TerminalColors.PrimaryText)
                     }
                 }
 
