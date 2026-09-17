@@ -41,9 +41,6 @@ import com.mufid.terminalmirror.ui.components.ConnectionStatusCard
 import com.mufid.terminalmirror.ui.components.QrScannerDialog
 import com.mufid.terminalmirror.ui.components.StatusHeader
 import com.mufid.terminalmirror.ui.components.WorkstationTabs
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicLong
 
 class MainActivity : ComponentActivity() {
