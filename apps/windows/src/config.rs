@@ -9,7 +9,12 @@ use clap::Parser;
 )]
 pub struct WindowsAgentConfig {
     /// Relay Server WebSocket URL (defaults to localhost or ZeroTier IP in private mode)
-    #[arg(short, long, env = "RELAY_SERVER_URL", default_value = "ws://127.0.0.1:8080/ws")]
+    #[arg(
+        short,
+        long,
+        env = "RELAY_SERVER_URL",
+        default_value = "ws://127.0.0.1:8080/ws"
+    )]
     pub relay_url: String,
 
     /// Unique host identifier
@@ -25,7 +30,11 @@ pub struct WindowsAgentConfig {
     pub shell: Option<String>,
 
     /// Authentication token for Relay Hub
-    #[arg(long, env = "RELAY_AUTH_TOKEN", default_value = "change_this_secret_token")]
+    #[arg(
+        long,
+        env = "RELAY_AUTH_TOKEN",
+        default_value = "change_this_secret_token"
+    )]
     pub auth_token: String,
 
     /// Optional explicit passphrase (defaults to 4-word random Diceware)

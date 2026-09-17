@@ -314,4 +314,20 @@ class TerminalScreenBuffer(
         cursorCol = 0
         isAltScreen = false
     }
+
+    /**
+     * Replaces the visible grid with a relay snapshot (gap-resync).
+     * Used when ScreenStateSync arrives after reconnect packet loss.
+     */
+    @Synchronized
+    fun replaceWithSnapshot(lines: List<String>, cursorX: Int = 0, cursorY: Int = 0) {
+        clear()
+        lines.take(rows).forEachIndexed { r, line ->
+            line.take(cols).forEachIndexed { c, ch ->
+                grid[r][c] = ch
+            }
+        }
+        cursorRow = cursorY.coerceIn(0, rows - 1)
+        cursorCol = cursorX.coerceIn(0, cols - 1)
+    }
 }

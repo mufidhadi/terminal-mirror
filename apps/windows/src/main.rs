@@ -22,7 +22,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = WindowsAgentConfig::parse();
 
     let resolved = resolve_windows_shell(config.shell.as_deref());
-    let session_id = format!("{}-{}", config.host_id, &uuid::Uuid::new_v4().to_string()[..8]);
+    let session_id = format!(
+        "{}-{}",
+        config.host_id,
+        &uuid::Uuid::new_v4().to_string()[..8]
+    );
     // Passphrase is never hardcoded: explicit --passphrase/PASSPHRASE wins,
     // otherwise a fresh ephemeral 4-word Diceware passphrase is generated.
     let formatted_passphrase = if let Some(custom) = &config.passphrase {
@@ -58,7 +62,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let debouncer = ResizeDebouncer::new(
         Duration::from_millis(config.resize_debounce_ms),
         move |cols, rows| {
-            info!("Debounced ConPTY resize executing: cols={}, rows={}", cols, rows);
+            info!(
+                "Debounced ConPTY resize executing: cols={}, rows={}",
+                cols, rows
+            );
             if let Err(e) = pty_for_resize.resize(cols, rows) {
                 tracing::warn!("Failed to resize ConPTY session: {}", e);
             }

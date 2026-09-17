@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -12,7 +13,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -50,12 +51,14 @@ import com.mufid.terminalmirror.ui.components.QrScannerDialog
 import com.mufid.terminalmirror.ui.components.StatusHeader
 import com.mufid.terminalmirror.ui.components.WorkstationTabs
 import java.util.concurrent.atomic.AtomicLong
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
     private val pendingPairingUri = mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
         pendingPairingUri.value = intent?.dataString
@@ -149,17 +152,34 @@ fun TerminalMirrorApp(
     val queueInfo = remember { mutableStateMapOf<String, Pair<Int, Int>>() }
 
     // ConnectionManager instance
+    var managerRef: ConnectionManager? by remember { mutableStateOf(null) }
     val connectionManager = remember {
         ConnectionManager(
             scope = coroutineScope,
             onSessionPayload = { sessionId, bytes ->
-                val decoded = codec.value.decodePacket(bytes)
-                if (decoded is DecodedPayload.TerminalOutput) {
-                    val screenBuffer = screenBuffers.getOrPut(sessionId) {
-                        TerminalScreenBuffer(cols = 80, rows = 24)
+                when (val decoded = codec.value.decodePacket(bytes)) {
+                    is DecodedPayload.TerminalOutput -> {
+                        val screenBuffer = screenBuffers.getOrPut(sessionId) {
+                            TerminalScreenBuffer(cols = 80, rows = 24)
+                        }
+                        screenBuffer.processChunk(decoded.text)
+                        terminalBuffers[sessionId] = screenBuffer.renderScreen()
                     }
-                    screenBuffer.processChunk(decoded.text)
-                    terminalBuffers[sessionId] = screenBuffer.renderScreen()
+                    is DecodedPayload.ScreenSync -> {
+                        val screenBuffer = screenBuffers.getOrPut(sessionId) {
+                            TerminalScreenBuffer(cols = 80, rows = 24)
+                        }
+                        screenBuffer.replaceWithSnapshot(decoded.lines, decoded.cursorX, decoded.cursorY)
+                        terminalBuffers[sessionId] = screenBuffer.renderScreen()
+                    }
+                    is DecodedPayload.SessionRevoked -> {
+                        managerRef?.disconnectSession(sessionId)
+                        onShowToast("Session revoked: ${decoded.reason}")
+                    }
+                    is DecodedPayload.ProtocolError -> {
+                        onShowToast("Relay error ${decoded.code}: ${decoded.message}")
+                    }
+                    else -> Unit
                 }
             },
             onSessionStatusChanged = { sessionId, isConnected ->
@@ -174,7 +194,7 @@ fun TerminalMirrorApp(
             onQueueChanged = { sessionId, queued, dropped ->
                 queueInfo[sessionId] = queued to dropped
             }
-        )
+        ).also { managerRef = it }
     }
 
     val activeState: ConnectionState =
@@ -285,12 +305,15 @@ fun TerminalMirrorApp(
                     }
                 }
             )
-        }
+        },
+        contentWindowInsets = WindowInsets.safeDrawing
     ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .consumeWindowInsets(innerPadding)
+                .imePadding()
                 .background(TerminalColors.ScreenBackground)
         ) {
             // Workstation Tabs (Mac / Windows / Linux)
@@ -392,7 +415,7 @@ fun TerminalMirrorApp(
                         },
                         colors = IconButtonDefaults.iconButtonColors(containerColor = TerminalColors.Send)
                     ) {
-                        Icon(Icons.Default.Send, contentDescription = "Send", tint = TerminalColors.PrimaryText)
+                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = TerminalColors.PrimaryText)
                     }
                 }
 
@@ -404,10 +427,8 @@ fun TerminalMirrorApp(
                         onShowToast("Emergency Kill dispatched (Ctrl+C)")
                     },
                     onDisconnect = {
-                        activeSession?.let { session ->
-                            connectionManager.disconnectSession(session.sessionId)
-                            onShowToast("Session disconnected — tap refresh to reconnect")
-                        }
+                        connectionManager.disconnectSession(activeSession.sessionId)
+                        onShowToast("Session disconnected — tap refresh to reconnect")
                     }
                 )
             }

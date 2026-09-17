@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::packet::OsType;
+use serde::{Deserialize, Serialize};
 
 /// Status of an active terminal session
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

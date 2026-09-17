@@ -16,7 +16,8 @@ impl RelayMetrics {
 
     pub fn inc_frames_routed(&self, byte_count: usize) {
         self.frames_routed.fetch_add(1, Ordering::Relaxed);
-        self.bytes_routed.fetch_add(byte_count as u64, Ordering::Relaxed);
+        self.bytes_routed
+            .fetch_add(byte_count as u64, Ordering::Relaxed);
     }
 
     pub fn inc_dropped_frames(&self, count: u64) {
@@ -24,7 +25,8 @@ impl RelayMetrics {
     }
 
     pub fn inc_rate_limited(&self) {
-        self.rate_limited_connections.fetch_add(1, Ordering::Relaxed);
+        self.rate_limited_connections
+            .fetch_add(1, Ordering::Relaxed);
     }
 
     pub fn render_prometheus(&self, active_sessions: usize, active_subscribers: usize) -> String {

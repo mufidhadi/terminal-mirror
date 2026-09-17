@@ -6,7 +6,17 @@ import org.msgpack.jackson.dataformat.MessagePackFactory
 import java.util.UUID
 
 sealed class DecodedPayload {
-    data class TerminalOutput(val text: String, val bytes: ByteArray) : DecodedPayload()
+    data class TerminalOutput(val text: String, val bytes: ByteArray, val sequence: Long = 0L) : DecodedPayload()
+    data class ScreenSync(
+        val lines: List<String>,
+        val cursorX: Int = 0,
+        val cursorY: Int = 0,
+        val cols: Int = 80,
+        val rows: Int = 24,
+        val sequence: Long = 0L
+    ) : DecodedPayload()
+    data class SessionRevoked(val reason: String, val sequence: Long = 0L) : DecodedPayload()
+    data class ProtocolError(val code: Int, val message: String, val sequence: Long = 0L) : DecodedPayload()
     data class Unhandled(val type: String) : DecodedPayload()
 }
 
@@ -16,12 +26,14 @@ class ProtocolCodec(private val e2eeManager: E2eeManager?) {
     /**
      * Decodes incoming MessagePack binary payload received from the Relay Hub.
      */
+    @Suppress("UNCHECKED_CAST")
     fun decodePacket(bytes: ByteArray): DecodedPayload? {
         return try {
-            val root = mapper.readValue(bytes, Map::class.java) as? Map<*, *> ?: return null
+            val root = mapper.readValue(bytes, Map::class.java) as Map<*, *>
             val payload = root["payload"] as? Map<*, *> ?: return null
             val type = payload["type"] as? String ?: return null
             val data = payload["data"] as? Map<*, *> ?: return null
+            val sequence = (root["sequence"] as? Number)?.toLong() ?: 0L
 
             when (type) {
                 "EncryptedBlob" -> {
@@ -34,7 +46,7 @@ class ProtocolCodec(private val e2eeManager: E2eeManager?) {
                     if (e2eeManager != null) {
                         val decrypted = e2eeManager.decrypt(nonce, ciphertext)
                         val text = String(decrypted, Charsets.UTF_8)
-                        DecodedPayload.TerminalOutput(text, decrypted)
+                        DecodedPayload.TerminalOutput(text, decrypted, sequence)
                     } else {
                         DecodedPayload.Unhandled("EncryptedBlob (no cipher configured)")
                     }
@@ -46,7 +58,31 @@ class ProtocolCodec(private val e2eeManager: E2eeManager?) {
                         else -> return null
                     }
                     val text = String(rawBytes, Charsets.UTF_8)
-                    DecodedPayload.TerminalOutput(text, rawBytes)
+                    DecodedPayload.TerminalOutput(text, rawBytes, sequence)
+                }
+                "ScreenStateSync" -> {
+                    val snap = data["snapshot"] as? Map<*, *> ?: return null
+                    val lines = when (val raw = snap["lines"]) {
+                        is List<*> -> raw.map { it.toString() }
+                        else -> emptyList()
+                    }
+                    DecodedPayload.ScreenSync(
+                        lines = lines,
+                        cursorX = (snap["cursor_x"] as? Number)?.toInt() ?: 0,
+                        cursorY = (snap["cursor_y"] as? Number)?.toInt() ?: 0,
+                        cols = (snap["cols"] as? Number)?.toInt() ?: 80,
+                        rows = (snap["rows"] as? Number)?.toInt() ?: 24,
+                        sequence = sequence
+                    )
+                }
+                "SessionRevoked" -> {
+                    val reason = data["reason"] as? String ?: "revoked"
+                    DecodedPayload.SessionRevoked(reason, sequence)
+                }
+                "Error" -> {
+                    val code = (data["code"] as? Number)?.toInt() ?: 0
+                    val message = data["message"] as? String ?: ""
+                    DecodedPayload.ProtocolError(code, message, sequence)
                 }
                 else -> DecodedPayload.Unhandled(type)
             }

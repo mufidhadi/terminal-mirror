@@ -37,7 +37,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let app = create_app(state);
     let listener = tokio::net::TcpListener::bind(&config.bind_addr).await?;
-    info!("Relay server actively listening on http://{}", config.bind_addr);
+    info!(
+        "Relay server actively listening on http://{}",
+        config.bind_addr
+    );
 
     axum::serve(
         listener,

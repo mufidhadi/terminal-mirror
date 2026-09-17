@@ -11,12 +11,7 @@ pub struct ConPtySession {
 
 impl ConPtySession {
     /// Spawns a ConPTY session with the resolved shell and arguments.
-    pub fn spawn(
-        executable: &str,
-        args: &[String],
-        cols: u16,
-        rows: u16,
-    ) -> io::Result<Self> {
+    pub fn spawn(executable: &str, args: &[String], cols: u16, rows: u16) -> io::Result<Self> {
         let pty_system = native_pty_system();
         let pair = pty_system
             .openpty(PtySize {
@@ -25,7 +20,7 @@ impl ConPtySession {
                 pixel_width: 0,
                 pixel_height: 0,
             })
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| io::Error::other(e.to_string()))?;
 
         let mut cmd = CommandBuilder::new(executable);
         for arg in args {
@@ -39,7 +34,7 @@ impl ConPtySession {
         let child = pair
             .slave
             .spawn_command(cmd)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| io::Error::other(e.to_string()))?;
         let child_pid = child.process_id();
         info!(
             "Spawned ConPTY shell: {} {:?} (PID: {:?}, initial grid: {}x{})",
@@ -57,10 +52,10 @@ impl ConPtySession {
         let master = self
             .master
             .lock()
-            .map_err(|_| io::Error::new(io::ErrorKind::Other, "Failed to lock master PTY"))?;
+            .map_err(|_| io::Error::other("Failed to lock master PTY"))?;
         master
             .try_clone_reader()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+            .map_err(|e| io::Error::other(e.to_string()))
     }
 
     /// Takes the PTY master writer for handling remote keyboard input.
@@ -68,10 +63,10 @@ impl ConPtySession {
         let master = self
             .master
             .lock()
-            .map_err(|_| io::Error::new(io::ErrorKind::Other, "Failed to lock master PTY"))?;
+            .map_err(|_| io::Error::other("Failed to lock master PTY"))?;
         master
             .take_writer()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+            .map_err(|e| io::Error::other(e.to_string()))
     }
 
     /// Resizes the ConPTY grid dimensions.
@@ -79,7 +74,7 @@ impl ConPtySession {
         let master = self
             .master
             .lock()
-            .map_err(|_| io::Error::new(io::ErrorKind::Other, "Failed to lock master PTY"))?;
+            .map_err(|_| io::Error::other("Failed to lock master PTY"))?;
         master
             .resize(PtySize {
                 rows,
@@ -87,7 +82,7 @@ impl ConPtySession {
                 pixel_width: 0,
                 pixel_height: 0,
             })
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+            .map_err(|e| io::Error::other(e.to_string()))
     }
 
     /// Returns the PID of the spawned shell process.

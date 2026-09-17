@@ -17,7 +17,11 @@ pub fn resolve_windows_shell(explicit: Option<&str>) -> ResolvedShell {
     if let Some(sh) = explicit {
         let trimmed = sh.trim();
         let args = if is_powershell(trimmed) {
-            vec!["-NoLogo".to_string(), "-ExecutionPolicy".to_string(), "Bypass".to_string()]
+            vec![
+                "-NoLogo".to_string(),
+                "-ExecutionPolicy".to_string(),
+                "Bypass".to_string(),
+            ]
         } else {
             Vec::new()
         };
@@ -31,7 +35,11 @@ pub fn resolve_windows_shell(explicit: Option<&str>) -> ResolvedShell {
         if !sh.trim().is_empty() {
             let trimmed = sh.trim();
             let args = if is_powershell(trimmed) {
-                vec!["-NoLogo".to_string(), "-ExecutionPolicy".to_string(), "Bypass".to_string()]
+                vec![
+                    "-NoLogo".to_string(),
+                    "-ExecutionPolicy".to_string(),
+                    "Bypass".to_string(),
+                ]
             } else {
                 Vec::new()
             };
@@ -50,18 +58,29 @@ pub fn resolve_windows_shell(explicit: Option<&str>) -> ResolvedShell {
             if std::path::Path::new(&pwsh_path).exists() {
                 return ResolvedShell {
                     executable: pwsh_path,
-                    arguments: vec!["-NoLogo".to_string(), "-ExecutionPolicy".to_string(), "Bypass".to_string()],
+                    arguments: vec![
+                        "-NoLogo".to_string(),
+                        "-ExecutionPolicy".to_string(),
+                        "Bypass".to_string(),
+                    ],
                 };
             }
         }
 
         // Try locating standard Windows PowerShell
         if let Ok(system_root) = std::env::var("SystemRoot") {
-            let win_powershell = format!(r"{}\System32\WindowsPowerShell\v1.0\powershell.exe", system_root);
+            let win_powershell = format!(
+                r"{}\System32\WindowsPowerShell\v1.0\powershell.exe",
+                system_root
+            );
             if std::path::Path::new(&win_powershell).exists() {
                 return ResolvedShell {
                     executable: win_powershell,
-                    arguments: vec!["-NoLogo".to_string(), "-ExecutionPolicy".to_string(), "Bypass".to_string()],
+                    arguments: vec![
+                        "-NoLogo".to_string(),
+                        "-ExecutionPolicy".to_string(),
+                        "Bypass".to_string(),
+                    ],
                 };
             }
         }
@@ -78,13 +97,20 @@ pub fn resolve_windows_shell(explicit: Option<&str>) -> ResolvedShell {
     // Default cross-platform fallback
     ResolvedShell {
         executable: "powershell.exe".to_string(),
-        arguments: vec!["-NoLogo".to_string(), "-ExecutionPolicy".to_string(), "Bypass".to_string()],
+        arguments: vec![
+            "-NoLogo".to_string(),
+            "-ExecutionPolicy".to_string(),
+            "Bypass".to_string(),
+        ],
     }
 }
 
 fn is_powershell(executable: &str) -> bool {
     let lower = executable.to_lowercase();
-    lower.ends_with("powershell.exe") || lower.ends_with("pwsh.exe") || lower == "powershell" || lower == "pwsh"
+    lower.ends_with("powershell.exe")
+        || lower.ends_with("pwsh.exe")
+        || lower == "powershell"
+        || lower == "pwsh"
 }
 
 #[cfg(test)]
@@ -97,7 +123,11 @@ mod tests {
         assert_eq!(shell.executable, "pwsh.exe");
         assert_eq!(
             shell.arguments,
-            vec!["-NoLogo".to_string(), "-ExecutionPolicy".to_string(), "Bypass".to_string()]
+            vec![
+                "-NoLogo".to_string(),
+                "-ExecutionPolicy".to_string(),
+                "Bypass".to_string()
+            ]
         );
     }
 
@@ -114,7 +144,9 @@ mod tests {
         assert!(is_powershell("pwsh.exe"));
         assert!(is_powershell(r"C:\Program Files\PowerShell\7\pwsh.exe"));
         assert!(is_powershell("powershell.exe"));
-        assert!(is_powershell(r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"));
+        assert!(is_powershell(
+            r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
+        ));
         assert!(!is_powershell("cmd.exe"));
         assert!(!is_powershell("bash"));
     }

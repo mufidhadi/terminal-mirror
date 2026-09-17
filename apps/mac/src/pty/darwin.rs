@@ -19,7 +19,7 @@ impl DarwinPtySession {
                 pixel_width: 0,
                 pixel_height: 0,
             })
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+            .map_err(io::Error::other)?;
 
         // Explicitly spawn as login shell (-l) to source .zprofile, .zshrc, and PATH
         let mut cmd = CommandBuilder::new(shell);
@@ -28,10 +28,7 @@ impl DarwinPtySession {
         cmd.env("COLORTERM", "truecolor");
         cmd.env("TERMINAL_MIRROR_ACTIVE", "1");
 
-        let child = pair
-            .slave
-            .spawn_command(cmd)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        let child = pair.slave.spawn_command(cmd).map_err(io::Error::other)?;
 
         info!(
             "Spawned macOS login shell ({}) in PTY with PID {:?}",
@@ -49,14 +46,11 @@ impl DarwinPtySession {
         self.pair
             .master
             .try_clone_reader()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+            .map_err(io::Error::other)
     }
 
     pub fn take_writer(&self) -> io::Result<Box<dyn Write + Send>> {
-        self.pair
-            .master
-            .take_writer()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+        self.pair.master.take_writer().map_err(io::Error::other)
     }
 
     #[allow(dead_code)]
@@ -69,6 +63,6 @@ impl DarwinPtySession {
                 pixel_width: 0,
                 pixel_height: 0,
             })
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+            .map_err(io::Error::other)
     }
 }

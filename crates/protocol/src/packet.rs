@@ -102,9 +102,7 @@ pub enum PacketPayload {
         message: String,
     },
     /// Raw terminal input (keystrokes, commands) sent to PTY
-    TerminalInput {
-        bytes: Vec<u8>,
-    },
+    TerminalInput { bytes: Vec<u8> },
     /// Raw terminal output (ANSI/VT100 delta stream) from PTY
     TerminalOutput {
         bytes: Vec<u8>,
@@ -112,19 +110,11 @@ pub enum PacketPayload {
         compression: CompressionAlgorithm,
     },
     /// Complete visual state snapshot sent upon client reconnect
-    ScreenStateSync {
-        snapshot: ScreenSnapshot,
-    },
+    ScreenStateSync { snapshot: ScreenSnapshot },
     /// Terminal dimension change (debounced)
-    TerminalResize {
-        cols: u16,
-        rows: u16,
-    },
+    TerminalResize { cols: u16, rows: u16 },
     /// End-to-End Encrypted payload (Zero-Knowledge Relay mode)
-    EncryptedBlob {
-        nonce: u64,
-        ciphertext: Vec<u8>,
-    },
+    EncryptedBlob { nonce: u64, ciphertext: Vec<u8> },
     /// Pairing request using 6-digit short PIN
     PairWithPin {
         pin: String,
@@ -138,22 +128,13 @@ pub enum PacketPayload {
         auth_token: String,
     },
     /// Host-initiated emergency kill switch (instant revocation)
-    SessionRevoked {
-        reason: String,
-    },
+    SessionRevoked { reason: String },
     /// Heartbeat ping
-    Ping {
-        nonce: u64,
-    },
+    Ping { nonce: u64 },
     /// Heartbeat response
-    Pong {
-        nonce: u64,
-    },
+    Pong { nonce: u64 },
     /// Protocol or operational error
-    Error {
-        code: u32,
-        message: String,
-    },
+    Error { code: u32, message: String },
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

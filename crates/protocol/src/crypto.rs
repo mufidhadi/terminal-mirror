@@ -68,12 +68,54 @@ impl E2eeCipher {
 pub struct DicewarePassphrase;
 
 const INDONESIAN_WORDLIST: &[&str] = &[
-    "batu", "merah", "kuda", "terbang", "angin", "langit", "gunung", "sungai",
-    "pantai", "pohon", "hutan", "bintang", "ombak", "garuda", "emas", "perak",
-    "mutiara", "kilat", "surya", "pelangi", "samudra", "lentera", "raja", "kancil",
-    "elang", "singa", "harimau", "padang", "rumput", "cahaya", "awan", "hujan",
-    "badai", "gempa", "mentari", "senja", "fajar", "subuh", "malam", "siang",
-    "kobar", "api", "pasir", "karang", "danau", "lembah", "kristal", "cakrawala",
+    "batu",
+    "merah",
+    "kuda",
+    "terbang",
+    "angin",
+    "langit",
+    "gunung",
+    "sungai",
+    "pantai",
+    "pohon",
+    "hutan",
+    "bintang",
+    "ombak",
+    "garuda",
+    "emas",
+    "perak",
+    "mutiara",
+    "kilat",
+    "surya",
+    "pelangi",
+    "samudra",
+    "lentera",
+    "raja",
+    "kancil",
+    "elang",
+    "singa",
+    "harimau",
+    "padang",
+    "rumput",
+    "cahaya",
+    "awan",
+    "hujan",
+    "badai",
+    "gempa",
+    "mentari",
+    "senja",
+    "fajar",
+    "subuh",
+    "malam",
+    "siang",
+    "kobar",
+    "api",
+    "pasir",
+    "karang",
+    "danau",
+    "lembah",
+    "kristal",
+    "cakrawala",
 ];
 
 impl DicewarePassphrase {
@@ -124,17 +166,24 @@ pub struct PairingPayload {
 
 impl PairingPayload {
     pub fn to_compact_uri(&self) -> String {
-        let clean_relay = self.relay_url
+        let clean_relay = self
+            .relay_url
             .trim_start_matches("ws://")
             .trim_start_matches("wss://")
             .trim_start_matches("http://")
             .trim_start_matches("https://");
-        let mut uri = format!("tm://{}?s={}&k={}", clean_relay, self.session_id, self.pre_shared_key);
+        let mut uri = format!(
+            "tm://{}?s={}&k={}",
+            clean_relay, self.session_id, self.pre_shared_key
+        );
         if let Some(p) = self.formatted_passphrase() {
             uri.push_str("&p=");
             uri.push_str(&p);
         }
-        if !self.host_id.is_empty() && self.host_id != "unknown-host" && self.host_id != "macbook-pro" {
+        if !self.host_id.is_empty()
+            && self.host_id != "unknown-host"
+            && self.host_id != "macbook-pro"
+        {
             uri.push_str(&format!("&h={}", self.host_id));
         }
         if !self.public_key.is_empty() {
@@ -159,7 +208,11 @@ impl PairingPayload {
             let host_path = parts.next().unwrap_or_default();
             let query = parts.next().unwrap_or_default();
 
-            let relay_url = if host_path.starts_with("127.0.0.1") || host_path.starts_with("172.") || host_path.starts_with("192.") || host_path.starts_with("10.") {
+            let relay_url = if host_path.starts_with("127.0.0.1")
+                || host_path.starts_with("172.")
+                || host_path.starts_with("192.")
+                || host_path.starts_with("10.")
+            {
                 format!("ws://{}", host_path)
             } else {
                 format!("wss://{}", host_path)

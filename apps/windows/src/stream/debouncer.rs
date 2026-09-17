@@ -66,7 +66,11 @@ impl ResizeDebouncer {
         Self { tx }
     }
 
-    pub async fn request_resize(&self, cols: u16, rows: u16) -> Result<(), mpsc::error::SendError<ResizeRequest>> {
+    pub async fn request_resize(
+        &self,
+        cols: u16,
+        rows: u16,
+    ) -> Result<(), mpsc::error::SendError<ResizeRequest>> {
         self.tx.send(ResizeRequest { cols, rows }).await
     }
 }

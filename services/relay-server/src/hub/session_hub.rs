@@ -34,7 +34,11 @@ impl SessionRouter {
 
     pub fn is_stale(&self, timeout: Duration) -> bool {
         let host_disconnected = self.host_tx.lock().map(|h| h.is_none()).unwrap_or(true);
-        let elapsed = self.last_activity.lock().map(|t| t.elapsed()).unwrap_or(Duration::ZERO);
+        let elapsed = self
+            .last_activity
+            .lock()
+            .map(|t| t.elapsed())
+            .unwrap_or(Duration::ZERO);
         host_disconnected && elapsed > timeout
     }
 }

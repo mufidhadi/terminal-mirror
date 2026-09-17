@@ -35,7 +35,11 @@ impl RelayHostClient {
 
     /// Constructs the full WebSocket connection URL including authentication and routing parameters.
     pub fn build_ws_url(&self) -> String {
-        let separator = if self.relay_url.contains('?') { "&" } else { "?" };
+        let separator = if self.relay_url.contains('?') {
+            "&"
+        } else {
+            "?"
+        };
         format!(
             "{}{separator}token={}&session_id={}&role=host",
             self.relay_url, self.auth_token, self.session_id

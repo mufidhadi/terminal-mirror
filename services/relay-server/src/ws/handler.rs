@@ -42,14 +42,20 @@ pub async fn ws_handler(
     // 1. IP Rate Limiting Guard
     if !state.rate_limiter.check_allowed(addr.ip()) {
         state.metrics.inc_rate_limited();
-        warn!("Rate limit exceeded for IP {}. Rejecting handshake.", addr.ip());
+        warn!(
+            "Rate limit exceeded for IP {}. Rejecting handshake.",
+            addr.ip()
+        );
         return Err(StatusCode::TOO_MANY_REQUESTS);
     }
 
     // 2. Auth Token Verification
     let provided_token = query.token.as_deref().unwrap_or_default();
     if provided_token != state.config.auth_token {
-        warn!("Unauthorized WebSocket attempt from {}: invalid auth token", addr);
+        warn!(
+            "Unauthorized WebSocket attempt from {}: invalid auth token",
+            addr
+        );
         return Err(StatusCode::UNAUTHORIZED);
     }
 
@@ -62,7 +68,10 @@ pub async fn ws_handler(
         }
     };
 
-    let role = query.role.unwrap_or_else(|| "client".to_string()).to_lowercase();
+    let role = query
+        .role
+        .unwrap_or_else(|| "client".to_string())
+        .to_lowercase();
 
     info!(
         "Upgrading WebSocket connection for session='{}' role='{}' from={}",
@@ -83,7 +92,10 @@ async fn handle_socket(
     let router = state.hub.get_or_create(&session_id);
 
     if role == "host" {
-        info!("Host Agent connected for session '{}' from {}", session_id, addr);
+        info!(
+            "Host Agent connected for session '{}' from {}",
+            session_id, addr
+        );
         let (upstream_tx, mut upstream_rx) = mpsc::channel::<Vec<u8>>(256);
         state.hub.register_host(&session_id, upstream_tx);
 
@@ -130,10 +142,16 @@ async fn handle_socket(
         }
 
         state.hub.unregister_host(&s_id);
-        info!("Host Agent disconnected for session '{}' from {}", s_id, addr);
+        info!(
+            "Host Agent disconnected for session '{}' from {}",
+            s_id, addr
+        );
     } else {
         // Subscriber client (Android / Mobile viewer)
-        info!("Subscriber connected to session '{}' from {}", session_id, addr);
+        info!(
+            "Subscriber connected to session '{}' from {}",
+            session_id, addr
+        );
         router.subscribers_count.fetch_add(1, Ordering::SeqCst);
         let mut broadcast_rx = router.broadcast_tx.subscribe();
         let metrics = state.metrics.clone();
@@ -163,7 +181,8 @@ async fn handle_socket(
                 match msg {
                     Ok(Message::Binary(bytes)) => {
                         router_upstream.touch();
-                        let maybe_host = router_upstream.host_tx.lock().ok().and_then(|h| h.clone());
+                        let maybe_host =
+                            router_upstream.host_tx.lock().ok().and_then(|h| h.clone());
                         if let Some(host_tx) = maybe_host {
                             let _ = host_tx.send(bytes).await;
                         }

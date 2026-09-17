@@ -38,7 +38,8 @@ impl Utf8StreamChunker {
                     valid
                 } else {
                     // The error is due to an incomplete multibyte sequence at the very end of the buffer!
-                    self.pending_bytes.extend_from_slice(&combined[valid_up_to..]);
+                    self.pending_bytes
+                        .extend_from_slice(&combined[valid_up_to..]);
                     combined[..valid_up_to].to_vec()
                 }
             }

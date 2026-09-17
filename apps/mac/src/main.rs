@@ -43,7 +43,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let resolved_shell = config.resolved_shell();
     let session_id = config.session_id.clone().unwrap_or_else(|| {
-        format!("{}-{}", config.host_id, &uuid::Uuid::new_v4().to_string()[..8])
+        format!(
+            "{}-{}",
+            config.host_id,
+            &uuid::Uuid::new_v4().to_string()[..8]
+        )
     });
 
     // Generate or use specified 4-word Diceware passphrase
@@ -74,8 +78,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let qr_json = pairing_payload.to_qr_string().ok();
 
     // Display ambient macOS developer banner with embedded QR code
-    render_startup_banner(&session_id, &formatted_passphrase, &resolved_shell, qr_json.as_deref());
-    info!("Starting macOS Darwin PTY session with shell: {}", resolved_shell);
+    render_startup_banner(
+        &session_id,
+        &formatted_passphrase,
+        &resolved_shell,
+        qr_json.as_deref(),
+    );
+    info!(
+        "Starting macOS Darwin PTY session with shell: {}",
+        resolved_shell
+    );
 
     // Enter raw mode for seamless local keyboard pass-through
     let _raw_guard = RawModeGuard::enter();
@@ -159,7 +171,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     if !config.no_e2ee {
-        let cipher = std::sync::Arc::new(terminal_mirror_protocol::E2eeCipher::from_secret(&formatted_passphrase));
+        let cipher = std::sync::Arc::new(terminal_mirror_protocol::E2eeCipher::from_secret(
+            &formatted_passphrase,
+        ));
         client = client.with_cipher(cipher);
         info!("Zero-Knowledge End-to-End Encryption (ChaCha20-Poly1305) ENABLED.");
     } else {

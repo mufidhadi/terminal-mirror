@@ -28,11 +28,16 @@ pub async fn health_check() -> &'static str {
 pub async fn metrics_handler(State(state): State<AppState>) -> String {
     let active_sessions = state.hub.active_sessions_count();
     let active_subscribers = state.hub.total_subscribers_count();
-    state.metrics.render_prometheus(active_sessions, active_subscribers)
+    state
+        .metrics
+        .render_prometheus(active_sessions, active_subscribers)
 }
 
 /// Spawns the background stale session garbage collector task.
-pub fn spawn_stale_session_reaper(hub: hub::SessionHub, timeout: Duration) -> tokio::task::JoinHandle<()> {
+pub fn spawn_stale_session_reaper(
+    hub: hub::SessionHub,
+    timeout: Duration,
+) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(Duration::from_secs(60));
         loop {

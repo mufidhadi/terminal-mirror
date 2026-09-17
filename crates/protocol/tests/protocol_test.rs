@@ -58,10 +58,15 @@ fn test_screen_snapshot_roundtrip() {
     };
     let packet = Packet::new("sess-tui-01", 1, payload);
 
-    let encoded = packet.to_msgpack().expect("Failed to encode snapshot packet");
+    let encoded = packet
+        .to_msgpack()
+        .expect("Failed to encode snapshot packet");
     let decoded = Packet::from_msgpack(&encoded).expect("Failed to decode snapshot packet");
 
-    if let PacketPayload::ScreenStateSync { snapshot: decoded_snap } = decoded.payload {
+    if let PacketPayload::ScreenStateSync {
+        snapshot: decoded_snap,
+    } = decoded.payload
+    {
         assert_eq!(decoded_snap.cols, 80);
         assert_eq!(decoded_snap.rows, 24);
         assert!(decoded_snap.in_alternate_screen);
@@ -80,14 +85,25 @@ fn test_pairing_payload_with_pin_and_trusted_device() {
         pre_shared_key: "k3y_pr3_sh4r3d_s3cur3".to_string(),
         public_key: "pub_k3y_x25519_3x4mpl3".to_string(),
         pin_code: Some("849201".to_string()),
-        passphrase_words: Some(vec!["kuda".into(), "terbang".into(), "batu".into(), "merah".into()]),
+        passphrase_words: Some(vec![
+            "kuda".into(),
+            "terbang".into(),
+            "batu".into(),
+            "merah".into(),
+        ]),
         expires_at_ms: 1726530000000,
     };
 
-    assert_eq!(pairing.formatted_passphrase().unwrap(), "kuda-terbang-batu-merah");
+    assert_eq!(
+        pairing.formatted_passphrase().unwrap(),
+        "kuda-terbang-batu-merah"
+    );
 
-    let qr_string = pairing.to_qr_string().expect("Failed to convert to QR string");
-    let parsed = PairingPayload::from_qr_string(&qr_string).expect("Failed to parse from QR string");
+    let qr_string = pairing
+        .to_qr_string()
+        .expect("Failed to convert to QR string");
+    let parsed =
+        PairingPayload::from_qr_string(&qr_string).expect("Failed to parse from QR string");
     assert_eq!(parsed, pairing);
 }
 

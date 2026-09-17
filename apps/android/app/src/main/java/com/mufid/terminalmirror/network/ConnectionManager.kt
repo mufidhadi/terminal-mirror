@@ -59,7 +59,7 @@ class ConnectionManager(
                     setState(sessionId, ConnectionState.Disconnected)
                     return
                 }
-                scheduleReconnect(sessionId, relayUrl, generation)
+                scheduleReconnect(sessionId, generation)
             }
 
             override fun onBinaryMessage(bytes: ByteArray) {
@@ -74,7 +74,7 @@ class ConnectionManager(
                     setState(sessionId, ConnectionState.Disconnected)
                     return
                 }
-                scheduleReconnect(sessionId, relayUrl, generation)
+                scheduleReconnect(sessionId, generation)
             }
         })
 
@@ -84,7 +84,7 @@ class ConnectionManager(
         client.connect()
     }
 
-    private fun scheduleReconnect(sessionId: String, relayUrl: String, generation: Long) {
+    private fun scheduleReconnect(sessionId: String, generation: Long) {
         val attempt = retryAttempts.getOrDefault(sessionId, 0) + 1
         retryAttempts[sessionId] = attempt
         val delayMs = ReconnectPolicy.nextDelayMs(attempt)

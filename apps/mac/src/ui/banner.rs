@@ -16,21 +16,26 @@ pub fn generate_terminal_qr(content: &str) -> Option<String> {
         })
 }
 
-pub fn render_startup_banner(session_id: &str, passphrase: &str, shell: &str, qr_content: Option<&str>) {
+pub fn render_startup_banner(
+    session_id: &str,
+    passphrase: &str,
+    shell: &str,
+    qr_content: Option<&str>,
+) {
     if let Some(content) = qr_content {
         if let Some(qr_str) = generate_terminal_qr(content) {
             let qr_lines: Vec<&str> = qr_str.lines().collect();
 
             let side_info = [
-                format!("\x1b[1;36m┌──────────────────────────────────────────────┐\x1b[0m"),
-                format!("\x1b[1;36m│\x1b[0m \x1b[1;32m● Terminal Mirror - macOS Host Active\x1b[0m        \x1b[1;36m│\x1b[0m"),
+                "\x1b[1;36m┌──────────────────────────────────────────────┐\x1b[0m".to_string(),
+                "\x1b[1;36m│\x1b[0m \x1b[1;32m● Terminal Mirror - macOS Host Active\x1b[0m        \x1b[1;36m│\x1b[0m".to_string(),
                 format!("\x1b[1;36m│\x1b[0m Shell:      \x1b[1m{:<33}\x1b[0m \x1b[1;36m│\x1b[0m", shell),
                 format!("\x1b[1;36m│\x1b[0m Session:    \x1b[1m{:<33}\x1b[0m \x1b[1;36m│\x1b[0m", session_id),
                 format!("\x1b[1;36m│\x1b[0m Passphrase: \x1b[1;33m{:<33}\x1b[0m \x1b[1;36m│\x1b[0m", passphrase),
-                format!("\x1b[1;36m│\x1b[0m Kill Switch: \x1b[1;31mCtrl + Shift + Q\x1b[0m                 \x1b[1;36m│\x1b[0m"),
-                format!("\x1b[1;36m└──────────────────────────────────────────────┘\x1b[0m"),
-                format!("\x1b[1;33m← Scan QR code with Android app to pair\x1b[0m"),
-                format!("\x1b[2m  Zero-Knowledge E2EE (ChaCha20-Poly1305)\x1b[0m"),
+                "\x1b[1;36m│\x1b[0m Kill Switch: \x1b[1;31mCtrl + Shift + Q\x1b[0m                 \x1b[1;36m│\x1b[0m".to_string(),
+                "\x1b[1;36m└──────────────────────────────────────────────┘\x1b[0m".to_string(),
+                "\x1b[1;33m← Scan QR code with Android app to pair\x1b[0m".to_string(),
+                "\x1b[2m  Zero-Knowledge E2EE (ChaCha20-Poly1305)\x1b[0m".to_string(),
             ];
 
             let max_lines = qr_lines.len().max(side_info.len());
@@ -86,7 +91,12 @@ mod tests {
             pre_shared_key: "secret".to_string(),
             public_key: "".to_string(),
             pin_code: None,
-            passphrase_words: Some(vec!["kilo".into(), "lima".into(), "sierra".into(), "tango".into()]),
+            passphrase_words: Some(vec![
+                "kilo".into(),
+                "lima".into(),
+                "sierra".into(),
+                "tango".into(),
+            ]),
             expires_at_ms: 1726532000000,
         };
         let qr_string = payload.to_qr_string().expect("to_qr_string failed");

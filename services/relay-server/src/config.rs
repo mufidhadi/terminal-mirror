@@ -13,11 +13,20 @@ pub struct RelayServerConfig {
     pub bind_addr: String,
 
     /// Authentication token required for host agents and subscribers
-    #[arg(long, env = "RELAY_AUTH_TOKEN", default_value = "change_this_secret_token")]
+    #[arg(
+        long,
+        env = "RELAY_AUTH_TOKEN",
+        default_value = "change_this_secret_token"
+    )]
     pub auth_token: String,
 
     /// Maximum incoming WebSocket connection handshakes per minute per IP
-    #[arg(long, alias = "max-conn-per-min", env = "MAX_CONN_PER_MIN", default_value_t = 60)]
+    #[arg(
+        long,
+        alias = "max-conn-per-min",
+        env = "MAX_CONN_PER_MIN",
+        default_value_t = 60
+    )]
     pub max_connections_per_min: u32,
 
     /// Maximum allowed WebSocket frame size in bytes (hard cap to prevent buffer bloat)

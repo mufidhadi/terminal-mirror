@@ -2,11 +2,11 @@ use futures_util::{SinkExt, StreamExt};
 use std::net::SocketAddr;
 use terminal_mirror_protocol::{CompressionAlgorithm, Packet, PacketPayload};
 use terminal_mirror_relay::config::RelayServerConfig;
+use terminal_mirror_relay::create_app;
 use terminal_mirror_relay::hub::SessionHub;
 use terminal_mirror_relay::metrics::RelayMetrics;
 use terminal_mirror_relay::middleware::IpRateLimiter;
 use terminal_mirror_relay::ws::AppState;
-use terminal_mirror_relay::create_app;
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
 
@@ -32,9 +32,12 @@ async fn spawn_test_server(max_conn_per_min: u32) -> (SocketAddr, String) {
     let addr = listener.local_addr().unwrap();
 
     tokio::spawn(async move {
-        axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())
-            .await
-            .unwrap();
+        axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await
+        .unwrap();
     });
 
     (addr, auth_token)
@@ -47,12 +50,16 @@ async fn test_e2e_bidirectional_streaming_between_host_and_subscriber() {
 
     // 1. Connect Host Agent
     let host_url = format!("ws://{addr}/ws?token={token}&session_id={session_id}&role=host");
-    let (ws_host, _) = connect_async(&host_url).await.expect("Host failed to connect");
+    let (ws_host, _) = connect_async(&host_url)
+        .await
+        .expect("Host failed to connect");
     let (mut host_sink, mut host_stream) = ws_host.split();
 
     // 2. Connect Mobile Subscriber
     let sub_url = format!("ws://{addr}/ws?token={token}&session_id={session_id}&role=client");
-    let (ws_sub, _) = connect_async(&sub_url).await.expect("Subscriber failed to connect");
+    let (ws_sub, _) = connect_async(&sub_url)
+        .await
+        .expect("Subscriber failed to connect");
     let (mut sub_sink, mut sub_stream) = ws_sub.split();
 
     // 3. Host publishes terminal output packet downstream
@@ -135,7 +142,10 @@ async fn test_e2e_rate_limiting_blocks_burst() {
 
     // 3rd attempt exceeds limit of 2
     let c3 = connect_async(&url3).await;
-    assert!(c3.is_err(), "3rd connection should be rejected with 429 Too Many Requests");
+    assert!(
+        c3.is_err(),
+        "3rd connection should be rejected with 429 Too Many Requests"
+    );
 }
 
 #[tokio::test]
@@ -151,12 +161,16 @@ async fn test_e2e_chacha20poly1305_zero_knowledge_relay() {
 
     // 1. Connect Host Agent
     let host_url = format!("ws://{addr}/ws?token={token}&session_id={session_id}&role=host");
-    let (ws_host, _) = connect_async(&host_url).await.expect("Host failed to connect");
+    let (ws_host, _) = connect_async(&host_url)
+        .await
+        .expect("Host failed to connect");
     let (mut host_sink, mut host_stream) = ws_host.split();
 
     // 2. Connect Mobile Subscriber
     let sub_url = format!("ws://{addr}/ws?token={token}&session_id={session_id}&role=client");
-    let (ws_sub, _) = connect_async(&sub_url).await.expect("Subscriber failed to connect");
+    let (ws_sub, _) = connect_async(&sub_url)
+        .await
+        .expect("Subscriber failed to connect");
     let (mut sub_sink, mut sub_stream) = ws_sub.split();
 
     // 3. Host encrypts terminal output and publishes EncryptedBlob downstream
@@ -174,7 +188,10 @@ async fn test_e2e_chacha20poly1305_zero_knowledge_relay() {
             ciphertext: ciphertext_down,
         },
     );
-    host_sink.send(Message::Binary(out_packet.to_msgpack().unwrap())).await.unwrap();
+    host_sink
+        .send(Message::Binary(out_packet.to_msgpack().unwrap()))
+        .await
+        .unwrap();
 
     // 4. Subscriber receives EncryptedBlob from Relay and decrypts
     let sub_msg = sub_stream.next().await.unwrap().unwrap();
@@ -208,7 +225,10 @@ async fn test_e2e_chacha20poly1305_zero_knowledge_relay() {
             ciphertext: ciphertext_up,
         },
     );
-    sub_sink.send(Message::Binary(in_packet.to_msgpack().unwrap())).await.unwrap();
+    sub_sink
+        .send(Message::Binary(in_packet.to_msgpack().unwrap()))
+        .await
+        .unwrap();
 
     // 6. Host receives EncryptedBlob from Relay and decrypts keystroke
     let host_msg = host_stream.next().await.unwrap().unwrap();

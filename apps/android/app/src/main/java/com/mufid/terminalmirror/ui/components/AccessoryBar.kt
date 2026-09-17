@@ -9,6 +9,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -44,6 +46,7 @@ fun AccessoryBar(
                 modifier = Modifier
                     .widthIn(min = 56.dp)
                     .height(48.dp)
+                    .semantics { contentDescription = "Send key $key" }
             ) {
                 Text(
                     text = key,
@@ -66,6 +69,7 @@ fun AccessoryBar(
                 modifier = Modifier
                     .widthIn(min = 72.dp)
                     .height(48.dp)
+                    .semantics { contentDescription = "Emergency kill, send Ctrl+C" }
             ) {
                 Text(
                     text = "KILL",
@@ -90,6 +94,7 @@ fun AccessoryBar(
                 modifier = Modifier
                     .widthIn(min = 72.dp)
                     .height(48.dp)
+                    .semantics { contentDescription = "Disconnect session" }
             ) {
                 Text(
                     text = "DISC",
