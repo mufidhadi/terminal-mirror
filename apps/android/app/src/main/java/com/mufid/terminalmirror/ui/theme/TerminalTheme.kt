@@ -1,5 +1,8 @@
 package com.mufid.terminalmirror.ui.theme
 
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
 /**
@@ -45,4 +48,32 @@ object TerminalColors {
     val Unlocked = Color(0xFFFF5722)
     val Kill = Color(0xFFB71C1C)
     val TabInactive = Color(0xFF888888)
+}
+
+private val TerminalDarkScheme = darkColorScheme(
+    primary = TerminalColors.Accent,
+    onPrimary = TerminalColors.PrimaryText,
+    secondary = TerminalColors.AccentLight,
+    background = TerminalColors.ScreenBackground,
+    onBackground = TerminalColors.PrimaryText,
+    surface = TerminalColors.CardBackground,
+    onSurface = TerminalColors.PrimaryText,
+    surfaceVariant = TerminalColors.InputBackground,
+    onSurfaceVariant = TerminalColors.SubtitleText,
+    error = TerminalColors.Error,
+    onError = TerminalColors.PrimaryText
+)
+
+/**
+ * App theme entry point. Deliberately dark-only: a terminal surface must
+ * keep maximum contrast regardless of wallpaper or system light mode, so
+ * Material You dynamic color is intentionally NOT applied here. Any future
+ * light scheme must preserve the terminal contrast guarantees.
+ */
+@Composable
+fun TerminalMirrorTheme(content: @Composable () -> Unit) {
+    MaterialTheme(
+        colorScheme = TerminalDarkScheme,
+        content = content
+    )
 }

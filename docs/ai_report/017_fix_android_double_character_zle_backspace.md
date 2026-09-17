@@ -52,7 +52,7 @@
    - Mengintegrasikan `TerminalBufferProcessor.processChunk` ke `MainActivity.kt` menggantikan konkatenasi string naif.
 
 4. **Perbaikan Parameter Sesi Default pada Host Agent (`run-mac.command`)**:
-   - Menambahkan argumen eksplisit `--session-id mac-live-session --passphrase batu-merah-kuda-terbang --relay-url ws://172.23.127.184:8888/ws --auth-token masmufid_super_secret_relay_2026` pada `run-mac.command`.
+   - Menambahkan argumen eksplisit `--session-id mac-live-session --passphrase [REDACTED] --relay-url ws://<zerotier-ip>:8888/ws --auth-token [REDACTED — rotated 2026-09-17]` pada `run-mac.command`.
    - Memastikan host agent macOS selalu terhubung ke session ID yang sama dengan client Android mas mufid.
 
 5. **Kompilasi & Pemasangan APK Baru**:

@@ -10,7 +10,13 @@ import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import kotlinx.coroutines.delay
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -57,12 +63,28 @@ fun StatusHeader(
             }
         },
         actions = {
-            // Connection State Chip: every lifecycle state is visible.
+            // Connection State Chip: every lifecycle state is visible, with a
+            // live retry countdown while reconnecting.
+            var tickMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+            val reconnecting = connectionState as? ConnectionState.Reconnecting
+            val deadlineMs = remember(reconnecting) {
+                System.currentTimeMillis() + (reconnecting?.delayMs ?: 0L)
+            }
+            LaunchedEffect(reconnecting) {
+                if (reconnecting != null) {
+                    while (true) {
+                        delay(500)
+                        tickMs = System.currentTimeMillis()
+                    }
+                }
+            }
             val (chipColor, chipText) = when (connectionState) {
                 is ConnectionState.Connected -> TerminalColors.Live to "● LIVE"
                 is ConnectionState.Connecting -> TerminalColors.Warning to "… CONN"
-                is ConnectionState.Reconnecting ->
-                    TerminalColors.Warning to "… R${connectionState.attempt}"
+                is ConnectionState.Reconnecting -> {
+                    val remainS = maxOf(0L, (deadlineMs - tickMs + 999) / 1000)
+                    TerminalColors.Warning to "… R${connectionState.attempt} ${remainS}s"
+                }
                 is ConnectionState.Disconnected -> TerminalColors.Offline to "○ OFF"
             }
             Box(

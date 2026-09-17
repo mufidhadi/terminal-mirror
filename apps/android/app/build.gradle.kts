@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -22,10 +24,10 @@ android {
         // Relay connection config comes from the git-ignored local.properties
         // (dev machines) or CI environment — never hardcoded. CI builds without
         // these keys fall back to placeholders that cannot reach production.
-        val localProps = java.util.Properties()
+        val localProps = Properties()
         val localPropsFile = rootProject.file("local.properties")
         if (localPropsFile.exists()) {
-            localPropsFile.inputStream().use { localProps.load(it) }
+            localPropsFile.inputStream().use { stream -> localProps.load(stream) }
         }
         fun configValue(name: String, default: String): String =
             localProps.getProperty(name) ?: System.getenv(name) ?: default

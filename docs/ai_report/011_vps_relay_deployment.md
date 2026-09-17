@@ -29,7 +29,7 @@
      ```env
      RELAY_BIND_IP=172.23.127.184
      RELAY_PORT=8888
-     RELAY_AUTH_TOKEN=masmufid_super_secret_relay_2026
+     RELAY_AUTH_TOKEN=[REDACTED — rotated 2026-09-17, see Report 022]
      MAX_CONN_PER_MIN=60
      MAX_PAYLOAD_BYTES=65536
      STALE_SESSION_TIMEOUT_SECS=300

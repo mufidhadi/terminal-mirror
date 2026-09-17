@@ -22,7 +22,7 @@ Its primary mission is to attach to or spawn a high-fidelity interactive Windows
   ┌────────────────────────────────────────────────────────────────────────┐
   │  ● Terminal Mirror - Windows Host Agent (ConPTY Active)               │
   │  Shell: powershell.exe     | Session: win-thinkpad-84a1               │
-  │  Passphrase : [ batu-merah-kuda-terbang ]                              │
+  │  Passphrase : [ kilo-lima-sierra-tango ]                               │
   │  Kill Switch: Ctrl + Shift + Q (Instant Revocation)                   │
   └────────────────────────────────────────────────────────────────────────┘
   ```

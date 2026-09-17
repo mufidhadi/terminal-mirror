@@ -27,6 +27,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mufid.terminalmirror.ui.theme.TerminalColors
+import com.mufid.terminalmirror.ui.theme.TerminalMirrorTheme
 import com.mufid.terminalmirror.crypto.E2eeManager
 import com.mufid.terminalmirror.model.OsType
 import com.mufid.terminalmirror.model.PairingPayload
@@ -66,12 +67,14 @@ class MainActivity : ComponentActivity() {
         startService(serviceIntent)
 
         setContent {
-            TerminalMirrorApp(
-                pendingPairingUri = pendingPairingUri,
-                onShowToast = { msg ->
-                    Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
-                }
-            )
+            TerminalMirrorTheme {
+                TerminalMirrorApp(
+                    pendingPairingUri = pendingPairingUri,
+                    onShowToast = { msg ->
+                        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+                    }
+                )
+            }
         }
     }
 
@@ -143,6 +146,7 @@ fun TerminalMirrorApp(
     // Observable connection lifecycle per session (WS7). The legacy boolean
     // callback is kept to drive the session list dot; states drive the UI.
     val connectionStates = remember { mutableStateMapOf<String, ConnectionState>() }
+    val queueInfo = remember { mutableStateMapOf<String, Pair<Int, Int>>() }
 
     // ConnectionManager instance
     val connectionManager = remember {
@@ -166,6 +170,9 @@ fun TerminalMirrorApp(
             },
             onConnectionState = { sessionId, state ->
                 connectionStates[sessionId] = state
+            },
+            onQueueChanged = { sessionId, queued, dropped ->
+                queueInfo[sessionId] = queued to dropped
             }
         )
     }
@@ -407,8 +414,7 @@ fun TerminalMirrorApp(
 
             if (!isReadOnly && activeSession != null && !isLive) {
                 val session = activeSession
-                val queued = connectionManager.queuedCount(session.sessionId)
-                val dropped = connectionManager.droppedCount(session.sessionId)
+                val (queued, dropped) = queueInfo[session.sessionId] ?: (0 to 0)
                 val stateText = when (val s = activeState) {
                     is ConnectionState.Reconnecting -> "Reconnecting (attempt ${s.attempt})"
                     is ConnectionState.Connecting -> "Connecting"

@@ -8,6 +8,7 @@ class ConnectionManager(
     private val onSessionPayload: (sessionId: String, bytes: ByteArray) -> Unit,
     private val onSessionStatusChanged: (sessionId: String, isConnected: Boolean) -> Unit,
     private val onConnectionState: (sessionId: String, state: ConnectionState) -> Unit = { _, _ -> },
+    private val onQueueChanged: (sessionId: String, queued: Int, dropped: Int) -> Unit = { _, _, _ -> },
     private val queueCapacity: Int = 200
 ) {
     private val activeClients = ConcurrentHashMap<String, RelayClient>()
@@ -33,7 +34,8 @@ class ConnectionManager(
     }
 
     fun connectSession(sessionId: String, relayUrl: String) {
-        disconnectSession(sessionId)
+        // Silent teardown: no Disconnected flicker on the way to Connecting.
+        removeClient(sessionId)
         // Generation guard: a late callback from a replaced client must not
         // trigger reconnects or state changes for the new client.
         val generation = (generations[sessionId] ?: 0L) + 1
@@ -96,9 +98,14 @@ class ConnectionManager(
         }
     }
 
+    private fun notifyQueueChanged(sessionId: String) {
+        onQueueChanged(sessionId, queuedCount(sessionId), droppedCount(sessionId))
+    }
+
     private fun drainQueue(sessionId: String) {
         val client = activeClients[sessionId] ?: return
         pendingQueues[sessionId]?.drain()?.forEach { client.sendBinary(it) }
+        notifyQueueChanged(sessionId)
     }
 
     fun sendToSession(sessionId: String, bytes: ByteArray) {
@@ -109,17 +116,23 @@ class ConnectionManager(
             client.sendBinary(bytes)
         } else {
             pendingQueues.getOrPut(sessionId) { OutboundQueue(queueCapacity) }.enqueue(bytes)
+            notifyQueueChanged(sessionId)
         }
     }
 
-    fun disconnectSession(sessionId: String) {
+    private fun removeClient(sessionId: String) {
         activeClients.remove(sessionId)?.disconnect()
         retryAttempts.remove(sessionId)
         socketLive.remove(sessionId)
         pendingQueues.remove(sessionId)
+        notifyQueueChanged(sessionId)
         // Bumping the generation silences late callbacks AND pending retry
         // loops from the replaced client.
         generations[sessionId] = (generations[sessionId] ?: 0L) + 1
+    }
+
+    fun disconnectSession(sessionId: String) {
+        removeClient(sessionId)
         setState(sessionId, ConnectionState.Disconnected)
     }
 

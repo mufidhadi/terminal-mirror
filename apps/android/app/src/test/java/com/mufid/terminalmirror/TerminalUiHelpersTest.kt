@@ -1,7 +1,9 @@
 package com.mufid.terminalmirror
 
 import com.mufid.terminalmirror.ui.KeystrokeEncoder
+import com.mufid.terminalmirror.ui.LineTone
 import com.mufid.terminalmirror.ui.RelayConfig
+import com.mufid.terminalmirror.ui.TerminalLineClassifier
 import com.mufid.terminalmirror.ui.TerminalUiHelpers
 import org.junit.Assert.*
 import org.junit.Test

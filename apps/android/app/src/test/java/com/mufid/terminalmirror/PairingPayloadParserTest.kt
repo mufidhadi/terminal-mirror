@@ -13,10 +13,20 @@ class PairingPayloadParserTest {
         val payload = PairingPayloadParser.parse(uri)
 
         assertNotNull(payload)
-        assertEquals("ws://relay.example.internal:8888/ws", payload?.relayUrl)
+        // Public DNS names correctly upgrade to wss:// (private-range IPs stay ws://)
+        assertEquals("wss://relay.example.internal:8888/ws", payload?.relayUrl)
         assertEquals("mac-live-session", payload?.sessionId)
         assertEquals("TEST_RELAY_TOKEN", payload?.preSharedKey)
         assertEquals("kilo-lima-sierra-tango", payload?.getFormattedPassphrase())
+    }
+
+    @Test
+    fun testParseCompactUriPrivateRangeStaysWs() {
+        val uri = "tm://10.20.30.40:8888/ws?s=mac-live-session&k=TEST_RELAY_TOKEN"
+        val payload = PairingPayloadParser.parse(uri)
+
+        assertNotNull(payload)
+        assertEquals("ws://10.20.30.40:8888/ws", payload?.relayUrl)
     }
 
     @Test
