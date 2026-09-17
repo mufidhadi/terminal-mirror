@@ -53,7 +53,7 @@ Modern mobile keyboards lack developer keys. When unlocked, the bottom accessory
 - Control modifiers: `ESC`, `TAB`, `CTRL`, `ALT`
 - Shell operators: Pipe (`|`), Tilde (`~`), Backtick (`` ` ``), Underscore (`_`), Hyphen (`-`)
 - Cursor navigation: `↑` (History prev), `↓` (History next), `←`, `→`
-- Emergency Kill Switch button: Instantly sends `Ctrl + Shift + Q` or disconnects the remote session.
+- Emergency Kill Switch button (`KILL`): sends `Ctrl+C` (SIGINT to the foreground process) with a confirmation toast. This is intentionally distinct from the host-laptop `Ctrl + Shift + Q` revocation hotkey, which kills the session from the workstation side. Bare `CTRL`/`ALT` taps are modifiers only and are never sent as literal text (the app shows a hint instead).
 
 #### 2.4 Touch Gestures & Viewport Navigation
 - **Pinch-to-Zoom**: Dynamically adjusts terminal font scale between 8 pt and 28 pt without requesting host PTY resizing.

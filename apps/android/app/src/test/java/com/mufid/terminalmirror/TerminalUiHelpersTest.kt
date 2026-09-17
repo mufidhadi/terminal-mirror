@@ -76,6 +76,28 @@ class TerminalUiHelpersTest {
     fun `keystroke encoder never sends bare modifiers as text`() {
         assertNull(KeystrokeEncoder.encode("CTRL"))
         assertNull(KeystrokeEncoder.encode("ALT"))
+        assertNull(KeystrokeEncoder.encode(" alt "))
+    }
+
+    @Test
+    fun `keystroke encoder is case-insensitive and trims input`() {
+        assertArrayEquals(byteArrayOf(0x1b), KeystrokeEncoder.encode(" esc "))
+        assertArrayEquals(byteArrayOf(0x03), KeystrokeEncoder.encode("ctrl+c"))
+        assertArrayEquals(byteArrayOf(0x1A), KeystrokeEncoder.encode("CTRL+Z"))
+    }
+
+    @Test
+    fun `keystroke encoder maps all arrow variants`() {
+        assertArrayEquals("\u001b[B".toByteArray(Charsets.UTF_8), KeystrokeEncoder.encode("↓"))
+        assertArrayEquals("\u001b[C".toByteArray(Charsets.UTF_8), KeystrokeEncoder.encode("→"))
+        assertArrayEquals("\u001b[B".toByteArray(Charsets.UTF_8), KeystrokeEncoder.encode("DOWN"))
+    }
+
+    @Test
+    fun `keystroke encoder passes shell operators literally`() {
+        for (op in listOf("|", "~", "`", "-", "_")) {
+            assertArrayEquals(op.toByteArray(Charsets.UTF_8), KeystrokeEncoder.encode(op))
+        }
     }
 
     @Test
