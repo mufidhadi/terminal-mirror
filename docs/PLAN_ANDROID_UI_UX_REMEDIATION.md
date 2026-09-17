@@ -67,7 +67,7 @@
 ## WS6 — Warna monoton + doc vs kode tidak sinkron (temuan 8)
 
 - **Masalah**: satu warna `0xFF58A6FF` untuk semua output; `ANDROID_APP_DESIGN.md` §3 klaim Termux `TerminalView` SurfaceView, implementasi nyata Compose `Text`.
-- **Keputusan (perlu mas mufid, default = A)**: **Opsi A (disarankan, murah)** — tetap Compose `Text` + pewarnaan semantik (error/sukses/muted), lalu koreksi dokumen. **Opsi B (mahal)** — implementasikan Termux `TerminalView` via `AndroidView` sesuai dokumen.
+- **Keputusan (LOCKED 2026-09-17 oleh mas mufid): Opsi A** — tetap Compose `Text` + pewarnaan semantik (error/sukses/muted), lalu koreksi dokumen. Opsi B (Termux `TerminalView` asli) ditunda sampai ada bukti TUI nyata yang gagal dirender `TerminalScreenBuffer`.
 - **File**: viewport terminal, `terminal/TerminalBufferProcessor.kt`, `terminal/TerminalScreenBuffer.kt`, `docs/ANDROID_APP_DESIGN.md`.
 - **Test**: unit parser ANSI → semantik; manual beda warna error/sukses.
 - **Done jika**: error/sukses/output distinguishable; tidak ada klaim arsitektur fiktif.
