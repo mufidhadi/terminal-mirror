@@ -51,8 +51,14 @@ WS5 remediation plan — eliminasi kredensial relay yang ter-commit di repo publ
 - Test negatif ("pastikan tidak ada X") harus ditulis agar tidak mengandung X itu sendiri.
 - Rotasi token adalah aksi server yang tidak bisa digantikansanitasi kode — keduanya wajib, dan rotasi masih menjadi tindak lanjut mas mufid (lihat §10).
 
-## 10. Tindak Lanjut (butuh mas mufid)
-1. **ROTASI token relay di VPS** (`RELAY_AUTH_TOKEN` baru via `docker compose`), karena token lama ada di history publik + APK lama (decompile-able). Setelah rotasi: update `.env` lokal + `local.properties` (`RELAY_HOST`, `RELAY_TOKEN`) di tiap mesin dev.
+## 10. Rotasi Token — SELESAI (2026-09-17, oleh asisten atas perintah mas mufid)
+- Token baru 64-hex dibuat lokal ke file sementara (tidak pernah tercetak), didorong ke VPS via stdin, `.env` VPS diupdate via script, container `terminal-mirror-relay` di-recreate (`docker compose up -d --force-recreate`), health: `healthy`.
+- Verifikasi tanpa eksposur (banding hash + kode status saja): env container MATCH token baru; `healthz=200`, token baru `101 Switching Protocols`, token salah `401`.
+- `.env` lokal + `apps/android/local.properties` (keduanya gitignored) diupdate via script; file sementara di-shred (VPS) dan dihapus (lokal).
+- E2E: 5 live-test lolos dengan token baru; token salah ditolak (e2ee test gagal konek sesuai harapan).
+- Sisa risiko yang TIDAK bisa dihapus: token lama tetap ada di git history publik + APK lama — anggap kompromi permanen; mitigasinya adalah rotasi ini.
+
+## 11. Tindak Lanjut Tersisa
 2. Jalankan `gradle testDebugUnitTest` di mesin ber-Android-toolchain (gap env ini).
 3. Redaksi IP/token di `docs/*.md` + screenshot lama bila diinginkan (di luar scan; tidak menghapus history).
 4. Lanjut WS1–WS4 sesuai `docs/PLAN_ANDROID_UI_UX_REMEDIATION.md`.
