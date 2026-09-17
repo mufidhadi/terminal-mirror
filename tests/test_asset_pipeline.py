@@ -114,6 +114,45 @@ def test_create_mac_app_bundle(tmp_path):
     assert plist_data["CFBundleIconFile"] == "AppIcon"
 
 
+def test_create_mac_app_bundle_quotes_env_values(tmp_path):
+    output_dir = tmp_path / "Applications"
+    dummy_bin = tmp_path / "terminal-mirror-mac"
+    dummy_bin.write_text("#!/bin/sh\necho 'running'")
+    dummy_bin.chmod(0o755)
+
+    icns_path = tmp_path / "AppIcon.icns"
+    generate_macos_icns(SOURCE_ICON, icns_path)
+
+    raw_env = tmp_path / "unquoted.env"
+    raw_env.write_text(
+        "RELAY_AUTH_TOKEN=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n"
+        "HOST_NAME=MacBook Pro Mas Mufid\n"
+        "# Comment line\n"
+        "SIMPLE_VAL=hello\n"
+    )
+
+    app_path = create_mac_app_bundle(
+        app_name="Terminal Mirror",
+        binary_path=dummy_bin,
+        icns_path=icns_path,
+        output_dir=output_dir,
+        bundle_id="com.mufid.terminalmirror",
+        version="0.1.0",
+        env_file_path=raw_env,
+    )
+
+    bundled_env = app_path / "Contents" / "Resources" / ".env"
+    assert bundled_env.exists()
+    content = bundled_env.read_text()
+    assert 'HOST_NAME="MacBook Pro Mas Mufid"' in content
+
+    # Test that zsh/sh can source it without syntax error
+    res = subprocess.run(["sh", "-n", str(bundled_env)], capture_output=True, text=True)
+    assert res.returncode == 0, f"Shell syntax error: {res.stderr}"
+    res_zsh = subprocess.run(["zsh", "-n", str(bundled_env)], capture_output=True, text=True)
+    assert res_zsh.returncode == 0, f"Zsh syntax error: {res_zsh.stderr}"
+
+
 def test_build_assets_integration(tmp_path, monkeypatch):
     import scripts.build_assets as ba
     monkeypatch.setattr(ba, "PROJECT_ROOT", tmp_path)

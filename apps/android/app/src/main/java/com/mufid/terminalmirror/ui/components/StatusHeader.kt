@@ -93,6 +93,7 @@ fun StatusHeader(
                     TerminalColors.Warning to "… R${connectionState.attempt} ${remainS}s"
                 }
                 is ConnectionState.Disconnected -> TerminalColors.Offline to "○ OFF"
+                is ConnectionState.AuthFailed -> TerminalColors.Error to "✕ 401 AUTH"
             }
             Box(
                 modifier = Modifier

@@ -9,7 +9,8 @@ class ConnectionManager(
     private val onSessionStatusChanged: (sessionId: String, isConnected: Boolean) -> Unit,
     private val onConnectionState: (sessionId: String, state: ConnectionState) -> Unit = { _, _ -> },
     private val onQueueChanged: (sessionId: String, queued: Int, dropped: Int) -> Unit = { _, _, _ -> },
-    private val queueCapacity: Int = 200
+    private val queueCapacity: Int = 200,
+    private val clientFactory: (String, RelayClient.RelayListener) -> RelayClient = { url, listener -> RelayClient(url, listener) }
 ) {
     private val activeClients = ConcurrentHashMap<String, RelayClient>()
     private val retryAttempts = ConcurrentHashMap<String, Int>()
@@ -42,7 +43,7 @@ class ConnectionManager(
         generations[sessionId] = generation
         fun isCurrent(): Boolean = generations[sessionId] == generation
 
-        val client = RelayClient(relayUrl, object : RelayClient.RelayListener {
+        val client = clientFactory(relayUrl, object : RelayClient.RelayListener {
             override fun onConnected() {
                 if (!isCurrent()) return
                 retryAttempts[sessionId] = 0
@@ -75,6 +76,13 @@ class ConnectionManager(
                     return
                 }
                 scheduleReconnect(sessionId, generation)
+            }
+
+            override fun onAuthError(message: String) {
+                if (!isCurrent()) return
+                socketLive[sessionId] = false
+                activeClients.remove(sessionId)?.disconnect()
+                setState(sessionId, ConnectionState.AuthFailed(message))
             }
         })
 

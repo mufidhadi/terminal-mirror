@@ -34,14 +34,21 @@ object PairingPayloadParser {
                 for (param in params) {
                     val kv = param.split("=", limit = 2)
                     if (kv.size == 2) {
-                        when (kv[0]) {
-                            "s" -> sessionId = kv[1]
-                            "h" -> hostId = kv[1]
-                            "k" -> psk = kv[1]
-                            "pub" -> pubKey = kv[1]
-                            "pin" -> pin = kv[1]
-                            "p" -> passphraseList = kv[1].split("-")
-                            "exp" -> expiresAt = kv[1].toLongOrNull() ?: 0L
+                        val key = kv[0]
+                        val rawVal = kv[1]
+                        val value = try {
+                            java.net.URLDecoder.decode(rawVal, "UTF-8")
+                        } catch (e: Exception) {
+                            rawVal
+                        }
+                        when (key) {
+                            "s" -> sessionId = value
+                            "h" -> hostId = value
+                            "k" -> psk = value
+                            "pub" -> pubKey = value
+                            "pin" -> pin = value
+                            "p" -> passphraseList = value.split("-")
+                            "exp" -> expiresAt = value.toLongOrNull() ?: 0L
                         }
                     }
                 }

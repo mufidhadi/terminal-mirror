@@ -16,6 +16,7 @@ sealed interface ConnectionState {
     data object Connecting : ConnectionState
     data object Connected : ConnectionState
     data class Reconnecting(val attempt: Int, val delayMs: Long) : ConnectionState
+    data class AuthFailed(val message: String) : ConnectionState
 }
 
 /**

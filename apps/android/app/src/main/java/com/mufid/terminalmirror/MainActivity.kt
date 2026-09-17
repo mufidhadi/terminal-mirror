@@ -214,6 +214,9 @@ fun TerminalMirrorApp(
                 if (state !is ConnectionState.Connected) {
                     hostOnlineStates[sessionId] = false
                 }
+                if (state is ConnectionState.AuthFailed) {
+                    onShowToast("Koneksi ditolak relay: Token tidak cocok (401 Unauthorized)")
+                }
             },
             onQueueChanged = { sessionId, queued, dropped ->
                 queueInfo[sessionId] = queued to dropped

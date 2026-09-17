@@ -47,4 +47,19 @@ class PairingPayloadParserTest {
         assertEquals("mac-live-session", payload?.sessionId)
         assertEquals("kilo-lima-sierra-tango", payload?.getFormattedPassphrase())
     }
+
+    @Test
+    fun testParseCompactUriWithHexTokenAndSpacedHostName() {
+        val dummyToken = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+        val uri = "tm://10.20.30.40:8888/ws?s=mac-live-session&k=$dummyToken&h=MacBook%20Pro%20Mas%20Mufid&p=kilo-lima-sierra-tango"
+        val payload = PairingPayloadParser.parse(uri)
+
+        assertNotNull(payload)
+        assertEquals("ws://10.20.30.40:8888/ws", payload?.relayUrl)
+        assertEquals("mac-live-session", payload?.sessionId)
+        assertEquals(dummyToken, payload?.preSharedKey)
+        assertEquals("MacBook Pro Mas Mufid", payload?.hostId)
+        assertEquals("kilo-lima-sierra-tango", payload?.getFormattedPassphrase())
+    }
 }
+

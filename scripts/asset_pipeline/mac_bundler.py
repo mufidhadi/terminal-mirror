@@ -7,6 +7,28 @@ from pathlib import Path
 from typing import Optional
 
 
+def sanitize_env_file(src_path: Path, dst_path: Path) -> None:
+    """Read env file and ensure values are properly quoted so shell sourcing works."""
+    lines = src_path.read_text(encoding="utf-8").splitlines()
+    sanitized_lines = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            sanitized_lines.append(line)
+            continue
+        if "=" in line:
+            key, val = line.split("=", 1)
+            key = key.strip()
+            val = val.strip()
+            if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
+                sanitized_lines.append(f'{key}={val}')
+            else:
+                sanitized_lines.append(f'{key}="{val}"')
+        else:
+            sanitized_lines.append(line)
+    dst_path.write_text("\n".join(sanitized_lines) + "\n", encoding="utf-8")
+
+
 def create_mac_app_bundle(
     app_name: str,
     binary_path: Path,
@@ -70,6 +92,6 @@ osascript -e 'tell application "Terminal" to activate' \\
 
     # 5. Optional .env
     if env_file_path and Path(env_file_path).exists():
-        shutil.copy2(env_file_path, resources_dir / ".env")
+        sanitize_env_file(Path(env_file_path), resources_dir / ".env")
 
     return app_bundle

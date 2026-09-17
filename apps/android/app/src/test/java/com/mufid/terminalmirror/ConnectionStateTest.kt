@@ -1,5 +1,6 @@
 package com.mufid.terminalmirror
 
+import com.mufid.terminalmirror.network.ConnectionState
 import com.mufid.terminalmirror.network.OutboundQueue
 import com.mufid.terminalmirror.network.ReconnectPolicy
 import org.junit.Assert.*
@@ -58,4 +59,13 @@ class ConnectionStateTest {
         assertEquals(0, q.size)
         assertEquals(0, q.droppedCount)
     }
+
+    @Test
+    fun `auth failed state contains error message and is distinct from disconnected`() {
+        val authError: ConnectionState = ConnectionState.AuthFailed("HTTP 401 Unauthorized")
+        assertTrue(authError is ConnectionState.AuthFailed)
+        assertEquals("HTTP 401 Unauthorized", (authError as ConnectionState.AuthFailed).message)
+        assertNotEquals(ConnectionState.Disconnected, authError)
+    }
 }
+

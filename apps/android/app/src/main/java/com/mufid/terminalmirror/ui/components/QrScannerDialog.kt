@@ -22,6 +22,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import android.view.HapticFeedbackConstants
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
@@ -47,6 +49,7 @@ fun QrScannerDialog(
     onPayloadScanned: (PairingPayload) -> Unit
 ) {
     val context = LocalContext.current
+    val view = LocalView.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
     var hasCameraPermission by remember {
@@ -158,7 +161,12 @@ fun QrScannerDialog(
                                                         val payload = com.mufid.terminalmirror.model.PairingPayloadParser.parse(raw)
                                                         if (payload != null && !isScanned) {
                                                             isScanned = true
-                                                            onPayloadScanned(payload)
+                                                            view.post {
+                                                                view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                                                            }
+                                                            ContextCompat.getMainExecutor(ctx).execute {
+                                                                onPayloadScanned(payload)
+                                                            }
                                                             break
                                                         }
                                                     }

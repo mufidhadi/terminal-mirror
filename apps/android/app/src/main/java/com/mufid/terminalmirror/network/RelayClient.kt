@@ -4,15 +4,18 @@ import okhttp3.*
 import okio.ByteString
 import java.util.concurrent.TimeUnit
 
-class RelayClient(
+open class RelayClient(
     private val relayUrl: String,
-    private val listener: RelayListener
+    protected val listener: RelayListener
 ) {
     interface RelayListener {
         fun onConnected()
         fun onDisconnected(code: Int, reason: String)
         fun onBinaryMessage(bytes: ByteArray)
         fun onError(t: Throwable)
+        fun onAuthError(message: String) {
+            onError(SecurityException(message))
+        }
     }
 
     private val client = OkHttpClient.Builder()
@@ -29,7 +32,7 @@ class RelayClient(
      */
     private var connectEpoch = 0L
 
-    fun connect() {
+    open fun connect() {
         val myEpoch = ++connectEpoch
         fun isCurrent(): Boolean = myEpoch == connectEpoch
 
@@ -56,7 +59,12 @@ class RelayClient(
 
             override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
                 if (!isCurrent()) return
-                listener.onError(t)
+                val isAuthError = response?.code == 401 || t.message?.contains("401") == true
+                if (isAuthError) {
+                    listener.onAuthError("Relay authentication failed (HTTP 401 Unauthorized)")
+                } else {
+                    listener.onError(t)
+                }
             }
         })
     }
@@ -65,7 +73,7 @@ class RelayClient(
         webSocket?.send(ByteString.of(*bytes))
     }
 
-    fun disconnect() {
+    open fun disconnect() {
         connectEpoch++
         webSocket?.close(1000, "Client disconnect")
         webSocket = null
