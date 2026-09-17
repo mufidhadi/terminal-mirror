@@ -168,7 +168,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         config.relay_url.clone(),
         config.auth_token.clone(),
         session_id.clone(),
-    );
+    )
+    .with_metadata(Some(config.name.clone()), Some(resolved_shell.clone()));
 
     if !config.no_e2ee {
         let cipher = std::sync::Arc::new(terminal_mirror_protocol::E2eeCipher::from_secret(

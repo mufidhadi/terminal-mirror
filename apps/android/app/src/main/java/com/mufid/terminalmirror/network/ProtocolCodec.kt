@@ -17,6 +17,13 @@ sealed class DecodedPayload {
     ) : DecodedPayload()
     data class SessionRevoked(val reason: String, val sequence: Long = 0L) : DecodedPayload()
     data class ProtocolError(val code: Int, val message: String, val sequence: Long = 0L) : DecodedPayload()
+    data class HostPresence(
+        val sessionId: String,
+        val online: Boolean,
+        val hostName: String?,
+        val shell: String?,
+        val timestampMs: Long = 0L
+    ) : DecodedPayload()
     data class Unhandled(val type: String) : DecodedPayload()
 }
 
@@ -34,8 +41,16 @@ class ProtocolCodec(private val e2eeManager: E2eeManager?) {
             val type = payload["type"] as? String ?: return null
             val data = payload["data"] as? Map<*, *> ?: return null
             val sequence = (root["sequence"] as? Number)?.toLong() ?: 0L
+            val timestampMs = (root["timestamp_ms"] as? Number)?.toLong() ?: 0L
 
             when (type) {
+                "HostPresence" -> {
+                    val sId = data["session_id"] as? String ?: (root["session_id"] as? String) ?: ""
+                    val online = data["online"] as? Boolean ?: false
+                    val hostName = data["host_name"] as? String
+                    val shell = data["shell"] as? String
+                    DecodedPayload.HostPresence(sId, online, hostName, shell, timestampMs)
+                }
                 "EncryptedBlob" -> {
                     val nonce = (data["nonce"] as? Number)?.toLong() ?: 0L
                     val ciphertext = when (val raw = data["ciphertext"]) {

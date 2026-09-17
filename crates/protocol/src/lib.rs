@@ -8,8 +8,8 @@ pub use crypto::{
     MAX_PAIRING_ATTEMPTS,
 };
 pub use packet::{
-    CompressionAlgorithm, OsType, Packet, PacketPayload, ScreenSnapshot, SessionRole,
-    PROTOCOL_VERSION,
+    CompressionAlgorithm, HostPresencePayload, OsType, Packet, PacketPayload, ScreenSnapshot,
+    SessionRole, PROTOCOL_VERSION,
 };
 pub use session::{SessionDescriptor, SessionStatus};
 pub use utf8_chunker::Utf8StreamChunker;

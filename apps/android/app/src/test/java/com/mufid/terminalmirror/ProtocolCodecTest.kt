@@ -74,4 +74,41 @@ class ProtocolCodecTest {
         val out = codec.decodePacket(bytes) as DecodedPayload.Unhandled
         assertEquals("Ping", out.type)
     }
+
+    @Test
+    fun `decode HostPresence online true parses metadata correctly`() {
+        val bytes = packetBytes(
+            "HostPresence",
+            mapOf(
+                "session_id" to "sess-1",
+                "online" to true,
+                "host_name" to "MacBook Pro Mas Mufid",
+                "shell" to "/bin/zsh"
+            )
+        )
+        val out = codec.decodePacket(bytes) as DecodedPayload.HostPresence
+        assertEquals("sess-1", out.sessionId)
+        assertTrue(out.online)
+        assertEquals("MacBook Pro Mas Mufid", out.hostName)
+        assertEquals("/bin/zsh", out.shell)
+        assertEquals(1726532000000L, out.timestampMs)
+    }
+
+    @Test
+    fun `decode HostPresence online false parses correctly`() {
+        val bytes = packetBytes(
+            "HostPresence",
+            mapOf(
+                "session_id" to "sess-1",
+                "online" to false,
+                "host_name" to null,
+                "shell" to null
+            )
+        )
+        val out = codec.decodePacket(bytes) as DecodedPayload.HostPresence
+        assertEquals("sess-1", out.sessionId)
+        assertFalse(out.online)
+        assertNull(out.hostName)
+        assertNull(out.shell)
+    }
 }

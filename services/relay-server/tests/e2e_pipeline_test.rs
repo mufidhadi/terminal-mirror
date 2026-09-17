@@ -75,7 +75,21 @@ async fn test_e2e_bidirectional_streaming_between_host_and_subscriber() {
     let encoded = out_packet.to_msgpack().unwrap();
     host_sink.send(Message::Binary(encoded)).await.unwrap();
 
-    // 4. Subscriber receives and decodes packet
+    // 4. Subscriber receives initial HostPresence first, then the terminal output packet
+    let first_msg = sub_stream.next().await.unwrap().unwrap();
+    if let Message::Binary(sub_bytes) = first_msg {
+        let presence_packet = Packet::from_msgpack(&sub_bytes).unwrap();
+        match presence_packet.payload {
+            PacketPayload::HostPresence(presence) => {
+                assert!(presence.online);
+                assert_eq!(presence.session_id, session_id);
+            }
+            other => panic!("Expected initial HostPresence, got: {:?}", other),
+        }
+    } else {
+        panic!("Expected binary WebSocket message for initial presence");
+    }
+
     let sub_msg = sub_stream.next().await.unwrap().unwrap();
     if let Message::Binary(sub_bytes) = sub_msg {
         let received_packet = Packet::from_msgpack(&sub_bytes).unwrap();
@@ -193,7 +207,20 @@ async fn test_e2e_chacha20poly1305_zero_knowledge_relay() {
         .await
         .unwrap();
 
-    // 4. Subscriber receives EncryptedBlob from Relay and decrypts
+    // 4. Subscriber receives initial HostPresence first, then EncryptedBlob
+    let first_msg = sub_stream.next().await.unwrap().unwrap();
+    if let Message::Binary(sub_bytes) = first_msg {
+        let packet = Packet::from_msgpack(&sub_bytes).unwrap();
+        match packet.payload {
+            PacketPayload::HostPresence(presence) => {
+                assert!(presence.online);
+            }
+            other => panic!("Expected HostPresence, got: {:?}", other),
+        }
+    } else {
+        panic!("Expected binary WebSocket message for presence");
+    }
+
     let sub_msg = sub_stream.next().await.unwrap().unwrap();
     if let Message::Binary(sub_bytes) = sub_msg {
         let packet = Packet::from_msgpack(&sub_bytes).unwrap();
@@ -245,5 +272,99 @@ async fn test_e2e_chacha20poly1305_zero_knowledge_relay() {
         }
     } else {
         panic!("Expected binary WebSocket message on host stream");
+    }
+}
+
+#[tokio::test]
+async fn test_e2e_host_presence_lifecycle() {
+    let (addr, token) = spawn_test_server(60).await;
+    let session_id = "presence-lifecycle-session";
+
+    // Scenario 1: Subscriber connects when host is offline
+    // Subscriber must immediately receive HostPresence { online: false }
+    let sub_url = format!("ws://{addr}/ws?token={token}&session_id={session_id}&role=client");
+    let (ws_sub, _) = connect_async(&sub_url).await.expect("Subscriber connect");
+    let (_sub_sink, mut sub_stream) = ws_sub.split();
+
+    let msg1 = sub_stream.next().await.unwrap().unwrap();
+    if let Message::Binary(bytes) = msg1 {
+        let pkt = Packet::from_msgpack(&bytes).unwrap();
+        match pkt.payload {
+            PacketPayload::HostPresence(presence) => {
+                assert!(!presence.online, "Host should be offline initially");
+                assert_eq!(presence.session_id, session_id);
+            }
+            other => panic!("Expected initial offline HostPresence, got: {:?}", other),
+        }
+    } else {
+        panic!("Expected binary frame");
+    }
+
+    // Scenario 2: Host connects with metadata
+    // Active subscriber must receive broadcast HostPresence { online: true, host_name: ..., shell: ... }
+    let host_url = format!(
+        "ws://{addr}/ws?token={token}&session_id={session_id}&role=host&host_name=MacBook+Pro+Mas+Mufid&shell=%2Fbin%2Fzsh"
+    );
+    let (ws_host, _) = connect_async(&host_url).await.expect("Host connect");
+    let (mut host_sink, _host_stream) = ws_host.split();
+
+    let msg2 = sub_stream.next().await.unwrap().unwrap();
+    if let Message::Binary(bytes) = msg2 {
+        let pkt = Packet::from_msgpack(&bytes).unwrap();
+        match pkt.payload {
+            PacketPayload::HostPresence(presence) => {
+                assert!(presence.online, "Host should be online after connection");
+                assert_eq!(presence.host_name.as_deref(), Some("MacBook Pro Mas Mufid"));
+                assert_eq!(presence.shell.as_deref(), Some("/bin/zsh"));
+            }
+            other => panic!("Expected online HostPresence broadcast, got: {:?}", other),
+        }
+    } else {
+        panic!("Expected binary frame");
+    }
+
+    // Scenario 3: A NEW subscriber connects while host is active
+    // New subscriber must receive direct initial HostPresence { online: true, ... }
+    let (ws_sub2, _) = connect_async(&sub_url).await.expect("Sub2 connect");
+    let (_sub2_sink, mut sub2_stream) = ws_sub2.split();
+
+    let msg_sub2 = sub2_stream.next().await.unwrap().unwrap();
+    if let Message::Binary(bytes) = msg_sub2 {
+        let pkt = Packet::from_msgpack(&bytes).unwrap();
+        match pkt.payload {
+            PacketPayload::HostPresence(presence) => {
+                assert!(presence.online, "New subscriber must see host as online");
+                assert_eq!(presence.host_name.as_deref(), Some("MacBook Pro Mas Mufid"));
+            }
+            other => panic!("Expected initial online HostPresence, got: {:?}", other),
+        }
+    } else {
+        panic!("Expected binary frame");
+    }
+
+    // Scenario 4: Host disconnects
+    // Both active subscribers must receive broadcast HostPresence { online: false }
+    host_sink.close().await.unwrap();
+
+    let msg_offline1 = sub_stream.next().await.unwrap().unwrap();
+    if let Message::Binary(bytes) = msg_offline1 {
+        let pkt = Packet::from_msgpack(&bytes).unwrap();
+        match pkt.payload {
+            PacketPayload::HostPresence(presence) => {
+                assert!(!presence.online, "Subscriber 1 must receive offline event");
+            }
+            other => panic!("Expected offline HostPresence, got: {:?}", other),
+        }
+    }
+
+    let msg_offline2 = sub2_stream.next().await.unwrap().unwrap();
+    if let Message::Binary(bytes) = msg_offline2 {
+        let pkt = Packet::from_msgpack(&bytes).unwrap();
+        match pkt.payload {
+            PacketPayload::HostPresence(presence) => {
+                assert!(!presence.online, "Subscriber 2 must receive offline event");
+            }
+            other => panic!("Expected offline HostPresence, got: {:?}", other),
+        }
     }
 }

@@ -56,6 +56,25 @@ impl Packet {
     pub fn from_msgpack(bytes: &[u8]) -> Result<Self, rmp_serde::decode::Error> {
         rmp_serde::from_slice(bytes)
     }
+
+    pub fn host_presence(
+        session_id: impl Into<String>,
+        online: bool,
+        host_name: Option<String>,
+        shell: Option<String>,
+    ) -> Self {
+        let s_id = session_id.into();
+        Self::new(
+            s_id.clone(),
+            0,
+            PacketPayload::HostPresence(HostPresencePayload {
+                session_id: s_id,
+                online,
+                host_name,
+                shell,
+            }),
+        )
+    }
 }
 
 /// Visual snapshot of terminal screen grid (prevents garbled text upon reconnect)
@@ -135,6 +154,17 @@ pub enum PacketPayload {
     Pong { nonce: u64 },
     /// Protocol or operational error
     Error { code: u32, message: String },
+    /// Real-time host presence lifecycle emitted by relay hub to subscribers
+    HostPresence(HostPresencePayload),
+}
+
+/// Metadata payload describing host presence lifecycle
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct HostPresencePayload {
+    pub session_id: String,
+    pub online: bool,
+    pub host_name: Option<String>,
+    pub shell: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

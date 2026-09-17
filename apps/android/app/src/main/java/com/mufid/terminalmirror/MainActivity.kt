@@ -149,6 +149,8 @@ fun TerminalMirrorApp(
     // Observable connection lifecycle per session (WS7). The legacy boolean
     // callback is kept to drive the session list dot; states drive the UI.
     val connectionStates = remember { mutableStateMapOf<String, ConnectionState>() }
+    val hostOnlineStates = remember { mutableStateMapOf<String, Boolean>() }
+    val lastPresenceTimestamps = remember { mutableStateMapOf<String, Long>() }
     val queueInfo = remember { mutableStateMapOf<String, Pair<Int, Int>>() }
 
     // ConnectionManager instance
@@ -158,6 +160,25 @@ fun TerminalMirrorApp(
             scope = coroutineScope,
             onSessionPayload = { sessionId, bytes ->
                 when (val decoded = codec.value.decodePacket(bytes)) {
+                    is DecodedPayload.HostPresence -> {
+                        val lastTs = lastPresenceTimestamps[decoded.sessionId] ?: 0L
+                        if (decoded.timestampMs >= lastTs) {
+                            lastPresenceTimestamps[decoded.sessionId] = decoded.timestampMs
+                            hostOnlineStates[decoded.sessionId] = decoded.online
+
+                            // Dynamically update host metadata if available
+                            if (!decoded.hostName.isNullOrBlank()) {
+                                val idx = sessions.indexOfFirst { it.sessionId == decoded.sessionId }
+                                if (idx >= 0) {
+                                    val cur = sessions[idx]
+                                    sessions[idx] = cur.copy(
+                                        hostName = decoded.hostName,
+                                        shell = decoded.shell ?: cur.shell
+                                    )
+                                }
+                            }
+                        }
+                    }
                     is DecodedPayload.TerminalOutput -> {
                         val screenBuffer = screenBuffers.getOrPut(sessionId) {
                             TerminalScreenBuffer(cols = 80, rows = 24)
@@ -190,6 +211,9 @@ fun TerminalMirrorApp(
             },
             onConnectionState = { sessionId, state ->
                 connectionStates[sessionId] = state
+                if (state !is ConnectionState.Connected) {
+                    hostOnlineStates[sessionId] = false
+                }
             },
             onQueueChanged = { sessionId, queued, dropped ->
                 queueInfo[sessionId] = queued to dropped
@@ -200,7 +224,9 @@ fun TerminalMirrorApp(
     val activeState: ConnectionState =
         activeSession?.let { connectionStates[it.sessionId] }
             ?: ConnectionState.Disconnected
-    val isLive = activeState is ConnectionState.Connected
+    val isRelayConnected = activeState is ConnectionState.Connected
+    val isHostOnline = activeSession?.let { hostOnlineStates[it.sessionId] } ?: false
+    val isLive = isRelayConnected && isHostOnline
 
     // Auto-connect to default live session on launch.
     // Real relay host/token come from BuildConfig (git-ignored local.properties
@@ -293,6 +319,7 @@ fun TerminalMirrorApp(
                 isReadOnly = isReadOnly,
                 onToggleReadOnly = { isReadOnly = !isReadOnly },
                 onOpenScanner = { showScannerDialog = true },
+                isHostOnline = isHostOnline,
                 onReconnect = {
                     activeSession?.let { session ->
                         screenBuffers[session.sessionId]?.clear()
@@ -345,8 +372,9 @@ fun TerminalMirrorApp(
                         hostName = activeSession?.hostName,
                         sessionId = activeSession?.sessionId,
                         relayLabel = RelayConfig.PLACEHOLDER_HOST,
-                        isConnected = isLive,
-                        isReadOnly = isReadOnly
+                        isConnected = isRelayConnected,
+                        isReadOnly = isReadOnly,
+                        isHostOnline = isHostOnline
                     )
                 } else {
                     // Semantic coloring: errors red, healthy lines green,
@@ -436,9 +464,10 @@ fun TerminalMirrorApp(
             if (!isReadOnly && activeSession != null && !isLive) {
                 val session = activeSession
                 val (queued, dropped) = queueInfo[session.sessionId] ?: (0 to 0)
-                val stateText = when (val s = activeState) {
-                    is ConnectionState.Reconnecting -> "Reconnecting (attempt ${s.attempt})"
-                    is ConnectionState.Connecting -> "Connecting"
+                val stateText = when {
+                    isRelayConnected && !isHostOnline -> "Relay connected — host agent offline"
+                    activeState is ConnectionState.Reconnecting -> "Reconnecting (attempt ${activeState.attempt})"
+                    activeState is ConnectionState.Connecting -> "Connecting"
                     else -> "Disconnected"
                 }
                 val queueText = if (queued > 0 || dropped > 0) {

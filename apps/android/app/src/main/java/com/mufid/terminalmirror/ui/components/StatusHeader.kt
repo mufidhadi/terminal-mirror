@@ -34,6 +34,7 @@ fun StatusHeader(
     onToggleReadOnly: () -> Unit,
     onOpenScanner: () -> Unit,
     onReconnect: () -> Unit = {},
+    isHostOnline: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     TopAppBar(
@@ -79,7 +80,13 @@ fun StatusHeader(
                 }
             }
             val (chipColor, chipText) = when (connectionState) {
-                is ConnectionState.Connected -> TerminalColors.Live to "● LIVE"
+                is ConnectionState.Connected -> {
+                    if (isHostOnline) {
+                        TerminalColors.Live to "● LIVE"
+                    } else {
+                        TerminalColors.Warning to "○ HOST OFF"
+                    }
+                }
                 is ConnectionState.Connecting -> TerminalColors.Warning to "… CONN"
                 is ConnectionState.Reconnecting -> {
                     val remainS = maxOf(0L, (deadlineMs - tickMs + 999) / 1000)

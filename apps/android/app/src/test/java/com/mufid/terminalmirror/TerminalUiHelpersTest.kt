@@ -126,10 +126,26 @@ class TerminalUiHelpersTest {
 
     @Test
     fun `status and mode labels are distinct per state`() {
-        assertEquals("CONNECTED", TerminalUiHelpers.statusLabel(true))
-        assertEquals("CONNECTING", TerminalUiHelpers.statusLabel(false))
+        assertEquals("CONNECTED", TerminalUiHelpers.statusLabel(true, true))
+        assertEquals("CONNECTING", TerminalUiHelpers.statusLabel(false, true))
+        assertEquals("RELAY OK — HOST OFFLINE", TerminalUiHelpers.statusLabel(true, false))
         assertEquals("LOCKED (Read-Only)", TerminalUiHelpers.modeLabel(true))
         assertEquals("UNLOCKED (Interactive)", TerminalUiHelpers.modeLabel(false))
+    }
+
+    @Test
+    fun `banner lines show host offline state when host disconnected`() {
+        val lines = TerminalUiHelpers.bannerLines(
+            hostName = "MacBook Pro Mas Mufid",
+            sessionId = "sess-1",
+            relayLabel = RelayConfig.PLACEHOLDER_HOST,
+            isConnected = true,
+            isReadOnly = false,
+            isHostOnline = false
+        )
+        val joined = lines.joinToString("\n")
+        assertTrue(joined.contains("RELAY OK — HOST OFFLINE"))
+        assertTrue(joined.contains("Relay connected. Waiting for host agent to start…"))
     }
 
     @Test

@@ -41,9 +41,14 @@ fun ConnectionStatusCard(
     relayLabel: String,
     isConnected: Boolean,
     isReadOnly: Boolean,
+    isHostOnline: Boolean = true,
     modifier: Modifier = Modifier
 ) {
-    val statusColor = if (isConnected) TerminalColors.LiveBright else TerminalColors.Warning
+    val statusColor = when {
+        !isConnected -> TerminalColors.Warning
+        !isHostOnline -> TerminalColors.Warning
+        else -> TerminalColors.LiveBright
+    }
     val relay = relayLabel.trim().ifEmpty { RelayConfig.PLACEHOLDER_HOST }
 
     Card(
@@ -80,14 +85,17 @@ fun ConnectionStatusCard(
             StatusRow(label = "Relay", value = relay)
             StatusRow(
                 label = "Status",
-                value = TerminalUiHelpers.statusLabel(isConnected),
+                value = TerminalUiHelpers.statusLabel(isConnected, isHostOnline),
                 valueColor = statusColor
             )
             StatusRow(label = "Mode", value = TerminalUiHelpers.modeLabel(isReadOnly))
 
             Text(
-                text = if (isConnected) "Streaming live PTY frames…"
-                else "Waiting for PTY frames…",
+                text = when {
+                    !isConnected -> "Waiting for PTY frames…"
+                    !isHostOnline -> "Relay connected. Waiting for host agent to start…"
+                    else -> "Streaming live PTY frames…"
+                },
                 color = TerminalColors.MutedText,
                 fontSize = 12.sp,
                 maxLines = 2,

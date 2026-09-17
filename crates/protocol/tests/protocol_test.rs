@@ -165,3 +165,51 @@ fn test_pairing_guard_three_strikes_auto_burn() {
     let res4 = guard.verify_attempt("kuda-terbang-batu-merah");
     assert_eq!(res4, Err(0));
 }
+
+#[test]
+fn test_host_presence_msgpack_roundtrip() {
+    let packet = Packet::host_presence(
+        "mac-live-session",
+        true,
+        Some("MacBook Pro Mas Mufid".into()),
+        Some("/bin/zsh".into()),
+    );
+    let bytes = packet.to_msgpack().expect("Failed to encode HostPresence");
+    let decoded = Packet::from_msgpack(&bytes).expect("Failed to decode HostPresence");
+    assert_eq!(packet, decoded);
+
+    if let PacketPayload::HostPresence(presence) = decoded.payload {
+        assert_eq!(presence.session_id, "mac-live-session");
+        assert!(presence.online);
+        assert_eq!(presence.host_name.as_deref(), Some("MacBook Pro Mas Mufid"));
+        assert_eq!(presence.shell.as_deref(), Some("/bin/zsh"));
+    } else {
+        panic!("Expected HostPresence payload variant");
+    }
+}
+
+#[test]
+fn test_host_presence_msgpack_roundtrip_offline() {
+    let packet = Packet::host_presence("mac-live-session", false, None, None);
+    let bytes = packet.to_msgpack().expect("Failed to encode HostPresence");
+    let decoded = Packet::from_msgpack(&bytes).expect("Failed to decode HostPresence");
+    assert_eq!(packet, decoded);
+
+    if let PacketPayload::HostPresence(presence) = decoded.payload {
+        assert_eq!(presence.session_id, "mac-live-session");
+        assert!(!presence.online);
+        assert_eq!(presence.host_name, None);
+        assert_eq!(presence.shell, None);
+    } else {
+        panic!("Expected HostPresence payload variant");
+    }
+}
+
+#[test]
+fn test_host_presence_helper_envelope() {
+    let packet = Packet::host_presence("win-session", true, Some("ThinkPad".into()), None);
+    assert_eq!(packet.version, 1);
+    assert_eq!(packet.sequence, 0);
+    assert!(packet.timestamp_ms > 0);
+    assert_eq!(packet.session_id, "win-session");
+}

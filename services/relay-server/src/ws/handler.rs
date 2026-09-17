@@ -31,6 +31,8 @@ pub struct WsQuery {
     pub token: Option<String>,
     pub session_id: Option<String>,
     pub role: Option<String>,
+    pub host_name: Option<String>,
+    pub shell: Option<String>,
 }
 
 pub async fn ws_handler(
@@ -73,12 +75,17 @@ pub async fn ws_handler(
         .unwrap_or_else(|| "client".to_string())
         .to_lowercase();
 
+    let host_name = query.host_name.clone();
+    let shell = query.shell.clone();
+
     info!(
         "Upgrading WebSocket connection for session='{}' role='{}' from={}",
         session_id, role, addr
     );
 
-    Ok(ws.on_upgrade(move |socket| handle_socket(socket, addr, session_id, role, state)))
+    Ok(ws.on_upgrade(move |socket| {
+        handle_socket(socket, addr, session_id, role, host_name, shell, state)
+    }))
 }
 
 async fn handle_socket(
@@ -86,6 +93,8 @@ async fn handle_socket(
     addr: SocketAddr,
     session_id: String,
     role: String,
+    host_name: Option<String>,
+    shell: Option<String>,
     state: AppState,
 ) {
     let (mut ws_sink, mut ws_stream) = socket.split();
@@ -96,8 +105,26 @@ async fn handle_socket(
             "Host Agent connected for session '{}' from {}",
             session_id, addr
         );
+        let conn_id = uuid::Uuid::new_v4();
         let (upstream_tx, mut upstream_rx) = mpsc::channel::<Vec<u8>>(256);
-        state.hub.register_host(&session_id, upstream_tx);
+        state.hub.register_host(
+            &session_id,
+            conn_id,
+            upstream_tx,
+            host_name.clone(),
+            shell.clone(),
+        );
+
+        // Broadcast host presence: online = true
+        let presence_pkt = terminal_mirror_protocol::Packet::host_presence(
+            session_id.clone(),
+            true,
+            host_name.clone(),
+            shell.clone(),
+        );
+        if let Ok(bytes) = presence_pkt.to_msgpack() {
+            let _ = router.broadcast_tx.send(bytes);
+        }
 
         let s_id = session_id.clone();
         // Task A: Forward upstream client keystrokes down to Host
@@ -126,6 +153,9 @@ async fn handle_socket(
                         router_broadcast.touch();
                         let _ = router_broadcast.broadcast_tx.send(bytes);
                     }
+                    Ok(Message::Ping(_)) | Ok(Message::Pong(_)) => {
+                        router_broadcast.touch();
+                    }
                     Ok(Message::Close(_)) => break,
                     Err(e) => {
                         error!("WebSocket error on host stream {}: {}", addr, e);
@@ -141,7 +171,15 @@ async fn handle_socket(
             _ = &mut recv_from_host => send_to_host.abort(),
         }
 
-        state.hub.unregister_host(&s_id);
+        let was_active = state.hub.unregister_host(&s_id, conn_id);
+        if was_active {
+            let offline_pkt =
+                terminal_mirror_protocol::Packet::host_presence(s_id.clone(), false, None, None);
+            if let Ok(bytes) = offline_pkt.to_msgpack() {
+                let _ = router.broadcast_tx.send(bytes);
+            }
+        }
+
         info!(
             "Host Agent disconnected for session '{}' from {}",
             s_id, addr
@@ -153,7 +191,22 @@ async fn handle_socket(
             session_id, addr
         );
         router.subscribers_count.fetch_add(1, Ordering::SeqCst);
+
+        // 1. Subscribe to broadcast channel FIRST (prevents join race condition)
         let mut broadcast_rx = router.broadcast_tx.subscribe();
+
+        // 2. Query current host presence and send initial packet directly to new subscriber
+        let (is_online, current_host, current_shell) = state.hub.get_host_presence(&session_id);
+        let initial_pkt = terminal_mirror_protocol::Packet::host_presence(
+            session_id.clone(),
+            is_online,
+            current_host,
+            current_shell,
+        );
+        if let Ok(bytes) = initial_pkt.to_msgpack() {
+            let _ = ws_sink.send(Message::Binary(bytes)).await;
+        }
+
         let metrics = state.metrics.clone();
 
         // Task A: Receive broadcast terminal frames and push to subscriber
@@ -181,8 +234,11 @@ async fn handle_socket(
                 match msg {
                     Ok(Message::Binary(bytes)) => {
                         router_upstream.touch();
-                        let maybe_host =
-                            router_upstream.host_tx.lock().ok().and_then(|h| h.clone());
+                        let maybe_host = router_upstream
+                            .host_tx
+                            .lock()
+                            .ok()
+                            .and_then(|h| h.as_ref().map(|(_, tx)| tx.clone()));
                         if let Some(host_tx) = maybe_host {
                             let _ = host_tx.send(bytes).await;
                         }

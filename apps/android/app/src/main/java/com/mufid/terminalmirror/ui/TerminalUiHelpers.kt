@@ -31,8 +31,12 @@ object TerminalUiHelpers {
         return host.take(maxChars - 1).trimEnd() + "…"
     }
 
-    fun statusLabel(isConnected: Boolean): String =
-        if (isConnected) "CONNECTED" else "CONNECTING"
+    fun statusLabel(isConnected: Boolean, isHostOnline: Boolean = true): String =
+        when {
+            !isConnected -> "CONNECTING"
+            !isHostOnline -> "RELAY OK — HOST OFFLINE"
+            else -> "CONNECTED"
+        }
 
     fun modeLabel(isReadOnly: Boolean): String =
         if (isReadOnly) "LOCKED (Read-Only)" else "UNLOCKED (Interactive)"
@@ -48,10 +52,16 @@ object TerminalUiHelpers {
         sessionId: String?,
         relayLabel: String,
         isConnected: Boolean,
-        isReadOnly: Boolean
+        isReadOnly: Boolean,
+        isHostOnline: Boolean = true
     ): List<String> {
-        val status = statusLabel(isConnected)
+        val status = statusLabel(isConnected, isHostOnline)
         val mode = modeLabel(isReadOnly)
+        val streamingText = when {
+            !isConnected -> "Waiting for PTY frames…"
+            !isHostOnline -> "Relay connected. Waiting for host agent to start…"
+            else -> "Streaming live PTY frames…"
+        }
         return listOf(
             "Terminal Mirror — Android Client",
             "Host: ${hostName?.trim().orEmpty().ifEmpty { "Unknown host" }}",
@@ -60,7 +70,7 @@ object TerminalUiHelpers {
             "Status: $status",
             "Mode: $mode",
             "",
-            if (isConnected) "Streaming live PTY frames…" else "Waiting for PTY frames…"
+            streamingText
         )
     }
 }
