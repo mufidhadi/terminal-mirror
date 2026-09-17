@@ -15,6 +15,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mufid.terminalmirror.model.TerminalSession
+import com.mufid.terminalmirror.network.ConnectionState
 import com.mufid.terminalmirror.ui.TerminalUiHelpers
 import com.mufid.terminalmirror.ui.theme.TerminalColors
 
@@ -22,6 +23,7 @@ import com.mufid.terminalmirror.ui.theme.TerminalColors
 @Composable
 fun StatusHeader(
     activeSession: TerminalSession?,
+    connectionState: ConnectionState = ConnectionState.Disconnected,
     isReadOnly: Boolean,
     onToggleReadOnly: () -> Unit,
     onOpenScanner: () -> Unit,
@@ -55,20 +57,25 @@ fun StatusHeader(
             }
         },
         actions = {
-            // Live Status Indicator Chip
+            // Connection State Chip: every lifecycle state is visible.
+            val (chipColor, chipText) = when (connectionState) {
+                is ConnectionState.Connected -> TerminalColors.Live to "● LIVE"
+                is ConnectionState.Connecting -> TerminalColors.Warning to "… CONN"
+                is ConnectionState.Reconnecting ->
+                    TerminalColors.Warning to "… R${connectionState.attempt}"
+                is ConnectionState.Disconnected -> TerminalColors.Offline to "○ OFF"
+            }
             Box(
                 modifier = Modifier
                     .padding(end = 4.dp)
-                    .background(
-                        color = if (activeSession?.isConnected == true) TerminalColors.Live else TerminalColors.Offline,
-                        shape = RoundedCornerShape(12.dp)
-                    )
+                    .background(color = chipColor, shape = RoundedCornerShape(12.dp))
                     .padding(horizontal = 8.dp, vertical = 3.dp)
             ) {
                 Text(
-                    text = if (activeSession?.isConnected == true) "● LIVE" else "○ OFFLINE",
+                    text = chipText,
                     fontSize = 10.sp,
-                    color = TerminalColors.PrimaryText
+                    color = TerminalColors.PrimaryText,
+                    maxLines = 1
                 )
             }
 

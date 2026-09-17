@@ -22,6 +22,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -32,6 +33,7 @@ import com.mufid.terminalmirror.model.PairingPayload
 import com.mufid.terminalmirror.model.PairingPayloadParser
 import com.mufid.terminalmirror.model.TerminalSession
 import com.mufid.terminalmirror.network.ConnectionManager
+import com.mufid.terminalmirror.network.ConnectionState
 import com.mufid.terminalmirror.network.DecodedPayload
 import com.mufid.terminalmirror.network.ProtocolCodec
 import com.mufid.terminalmirror.service.TerminalMirrorService
@@ -138,6 +140,10 @@ fun TerminalMirrorApp(
 
     val activeSession = sessions.getOrNull(selectedTabIndex)
 
+    // Observable connection lifecycle per session (WS7). The legacy boolean
+    // callback is kept to drive the session list dot; states drive the UI.
+    val connectionStates = remember { mutableStateMapOf<String, ConnectionState>() }
+
     // ConnectionManager instance
     val connectionManager = remember {
         ConnectionManager(
@@ -157,9 +163,17 @@ fun TerminalMirrorApp(
                 if (idx >= 0) {
                     sessions[idx] = sessions[idx].copy(isConnected = isConnected)
                 }
+            },
+            onConnectionState = { sessionId, state ->
+                connectionStates[sessionId] = state
             }
         )
     }
+
+    val activeState: ConnectionState =
+        activeSession?.let { connectionStates[it.sessionId] }
+            ?: ConnectionState.Disconnected
+    val isLive = activeState is ConnectionState.Connected
 
     // Auto-connect to default live session on launch.
     // Real relay host/token come from BuildConfig (git-ignored local.properties
@@ -248,6 +262,7 @@ fun TerminalMirrorApp(
         topBar = {
             StatusHeader(
                 activeSession = activeSession,
+                connectionState = activeState,
                 isReadOnly = isReadOnly,
                 onToggleReadOnly = { isReadOnly = !isReadOnly },
                 onOpenScanner = { showScannerDialog = true },
@@ -300,7 +315,7 @@ fun TerminalMirrorApp(
                         hostName = activeSession?.hostName,
                         sessionId = activeSession?.sessionId,
                         relayLabel = RelayConfig.PLACEHOLDER_HOST,
-                        isConnected = activeSession?.isConnected == true,
+                        isConnected = isLive,
                         isReadOnly = isReadOnly
                     )
                 } else {
@@ -328,8 +343,10 @@ fun TerminalMirrorApp(
                 }
             }
 
-            // Quick Command Input Field
-            if (!isReadOnly && activeSession != null) {
+            // Quick Command Input Field: live only. While offline the input
+            // is replaced by an honest status line — keystrokes can never be
+            // typed into a dead socket and silently lost (temuan 9).
+            if (!isReadOnly && activeSession != null && isLive) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -385,6 +402,30 @@ fun TerminalMirrorApp(
                             onShowToast("Session disconnected — tap refresh to reconnect")
                         }
                     }
+                )
+            }
+
+            if (!isReadOnly && activeSession != null && !isLive) {
+                val session = activeSession
+                val queued = connectionManager.queuedCount(session.sessionId)
+                val dropped = connectionManager.droppedCount(session.sessionId)
+                val stateText = when (val s = activeState) {
+                    is ConnectionState.Reconnecting -> "Reconnecting (attempt ${s.attempt})"
+                    is ConnectionState.Connecting -> "Connecting"
+                    else -> "Disconnected"
+                }
+                val queueText = if (queued > 0 || dropped > 0) {
+                    " · $queued queued" + (if (dropped > 0) " ($dropped dropped)" else "")
+                } else ""
+                Text(
+                    text = "$stateText — input paused$queueText. Tap refresh to reconnect.",
+                    color = TerminalColors.MutedText,
+                    fontSize = 12.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 10.dp)
                 )
             }
         }

@@ -2,70 +2,125 @@ package com.mufid.terminalmirror.network
 
 import kotlinx.coroutines.*
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.math.min
-import kotlin.random.Random
 
 class ConnectionManager(
     private val scope: CoroutineScope,
     private val onSessionPayload: (sessionId: String, bytes: ByteArray) -> Unit,
-    private val onSessionStatusChanged: (sessionId: String, isConnected: Boolean) -> Unit
+    private val onSessionStatusChanged: (sessionId: String, isConnected: Boolean) -> Unit,
+    private val onConnectionState: (sessionId: String, state: ConnectionState) -> Unit = { _, _ -> },
+    private val queueCapacity: Int = 200
 ) {
     private val activeClients = ConcurrentHashMap<String, RelayClient>()
     private val retryAttempts = ConcurrentHashMap<String, Int>()
+    private val socketLive = ConcurrentHashMap<String, Boolean>()
+    private val states = ConcurrentHashMap<String, ConnectionState>()
+    private val pendingQueues = ConcurrentHashMap<String, OutboundQueue>()
+    private val generations = ConcurrentHashMap<String, Long>()
+
+    fun stateOf(sessionId: String): ConnectionState =
+        states[sessionId] ?: ConnectionState.Disconnected
+
+    fun queuedCount(sessionId: String): Int =
+        pendingQueues[sessionId]?.size ?: 0
+
+    fun droppedCount(sessionId: String): Int =
+        pendingQueues[sessionId]?.droppedCount ?: 0
+
+    private fun setState(sessionId: String, state: ConnectionState) {
+        states[sessionId] = state
+        onConnectionState(sessionId, state)
+        onSessionStatusChanged(sessionId, state is ConnectionState.Connected)
+    }
 
     fun connectSession(sessionId: String, relayUrl: String) {
         disconnectSession(sessionId)
+        // Generation guard: a late callback from a replaced client must not
+        // trigger reconnects or state changes for the new client.
+        val generation = (generations[sessionId] ?: 0L) + 1
+        generations[sessionId] = generation
+        fun isCurrent(): Boolean = generations[sessionId] == generation
 
         val client = RelayClient(relayUrl, object : RelayClient.RelayListener {
             override fun onConnected() {
+                if (!isCurrent()) return
                 retryAttempts[sessionId] = 0
-                onSessionStatusChanged(sessionId, true)
+                socketLive[sessionId] = true
+                drainQueue(sessionId)
+                setState(sessionId, ConnectionState.Connected)
             }
 
             override fun onDisconnected(code: Int, reason: String) {
-                onSessionStatusChanged(sessionId, false)
-                scheduleReconnect(sessionId, relayUrl)
+                if (!isCurrent()) return
+                socketLive[sessionId] = false
+                // Manual DISC removed the client: stay Disconnected, no retry.
+                if (!activeClients.containsKey(sessionId)) {
+                    setState(sessionId, ConnectionState.Disconnected)
+                    return
+                }
+                scheduleReconnect(sessionId, relayUrl, generation)
             }
 
             override fun onBinaryMessage(bytes: ByteArray) {
+                if (!isCurrent()) return
                 onSessionPayload(sessionId, bytes)
             }
 
             override fun onError(t: Throwable) {
-                onSessionStatusChanged(sessionId, false)
-                scheduleReconnect(sessionId, relayUrl)
+                if (!isCurrent()) return
+                socketLive[sessionId] = false
+                if (!activeClients.containsKey(sessionId)) {
+                    setState(sessionId, ConnectionState.Disconnected)
+                    return
+                }
+                scheduleReconnect(sessionId, relayUrl, generation)
             }
         })
 
         activeClients[sessionId] = client
+        pendingQueues.getOrPut(sessionId) { OutboundQueue(queueCapacity) }
+        setState(sessionId, ConnectionState.Connecting)
         client.connect()
     }
 
-    private fun scheduleReconnect(sessionId: String, relayUrl: String) {
+    private fun scheduleReconnect(sessionId: String, relayUrl: String, generation: Long) {
         val attempt = retryAttempts.getOrDefault(sessionId, 0) + 1
         retryAttempts[sessionId] = attempt
-
-        // Exponential backoff with randomized jitter: min(30000, 500 * 2^attempt) + random(0..1000)
-        val baseDelay = min(30000L, 500L * (1L shl min(attempt, 6)))
-        val jitter = Random.nextLong(0, 1000L)
-        val totalDelay = baseDelay + jitter
+        val delayMs = ReconnectPolicy.nextDelayMs(attempt)
+        setState(sessionId, ConnectionState.Reconnecting(attempt, delayMs))
 
         scope.launch {
-            delay(totalDelay)
-            if (activeClients.containsKey(sessionId)) {
+            delay(delayMs)
+            if (generations[sessionId] == generation && activeClients.containsKey(sessionId)) {
                 activeClients[sessionId]?.connect()
             }
         }
     }
 
+    private fun drainQueue(sessionId: String) {
+        val client = activeClients[sessionId] ?: return
+        pendingQueues[sessionId]?.drain()?.forEach { client.sendBinary(it) }
+    }
+
     fun sendToSession(sessionId: String, bytes: ByteArray) {
-        activeClients[sessionId]?.sendBinary(bytes)
+        val client = activeClients[sessionId]
+        // Socket liveness is tracked locally: RelayClient.sendBinary() drops
+        // silently on a dead socket, so never hand it bytes unless open.
+        if (client != null && socketLive.getOrDefault(sessionId, false)) {
+            client.sendBinary(bytes)
+        } else {
+            pendingQueues.getOrPut(sessionId) { OutboundQueue(queueCapacity) }.enqueue(bytes)
+        }
     }
 
     fun disconnectSession(sessionId: String) {
         activeClients.remove(sessionId)?.disconnect()
         retryAttempts.remove(sessionId)
-        onSessionStatusChanged(sessionId, false)
+        socketLive.remove(sessionId)
+        pendingQueues.remove(sessionId)
+        // Bumping the generation silences late callbacks AND pending retry
+        // loops from the replaced client.
+        generations[sessionId] = (generations[sessionId] ?: 0L) + 1
+        setState(sessionId, ConnectionState.Disconnected)
     }
 
     fun disconnectAll() {
