@@ -9,7 +9,7 @@ The **Terminal Mirror Android Client** is a native, modern mobile application wr
 Its core mission is to provide an ultra-responsive, battery-efficient, and secure viewing experience for active workstation terminal sessions (macOS Darwin and Windows ConPTY) in real time over WiFi, cellular networks (4G/5G), and private mesh networks (ZeroTier).
 
 Key engineering pillars:
-1. **Zero-Lag Off-Thread Rendering**: Embedding Termux `terminal-view` via `AndroidView` backed by `SurfaceView` to isolate high-frequency ANSI terminal escape rendering from the Jetpack Compose UI recomposition cycle.
+1. **Compose-Native Rendering With Bounded Recomposition**: Terminal output renders in a Compose `Text` viewport backed by `TerminalScreenBuffer` (80×24 2D matrix, ANSI CSI/erase/alt-screen) + `TerminalBufferProcessor` (ZLE backspace, CRLF, ANSI strip). State is read low in the tree and updates are line-batched; semantic spans (`TerminalLineClassifier`: error/success/muted/normal) color output instead of one flat blue.
 2. **Read-Only Safety First**: Default read-only lock to prevent accidental mobile touches, pocket typing, or gesture collisions from interrupting critical host development builds or production commands.
 3. **Multi-Workstation Parallel Streaming**: Concurrent WebSocket subscriptions allowing seamless tab-switching between macOS (`zsh`) and Windows (`pwsh`) workstations without stream re-negotiation.
 4. **Android Doze & Network Roaming Resilience**: An active `Foreground Service` coupled with a CPU `PARTIAL_WAKE_LOCK` and `ConnectivityManager.NetworkCallback` with exponential backoff and jitter.
@@ -33,7 +33,7 @@ Key engineering pillars:
 │     Running unittests src/main.rs                      │
 │     test result: ok. 15 passed; 0 failed               │
 │                                                        │
-│  [Hardware SurfaceView / Termux TerminalView]          │
+│  [Compose Text viewport + semantic spans]              │
 │                                                        │
 ├────────────────────────────────────────────────────────┤
 │ [ESC] [TAB] [CTRL] [ALT] [ | ] [ ~ ] [ ↑ ] [ ↓ ] [ ← ] │ <- Accessory Bar
@@ -65,61 +65,45 @@ Modern mobile keyboards lack developer keys. When unlocked, the bottom accessory
 
 ---
 
-### 3. Rendering Engine Architecture: SurfaceView + Termux `terminal-view`
+### 3. Rendering Engine Architecture: Compose Text + Screen Buffer (Opsi A, LOCKED)
 
-#### 3.1 Why Compose Canvas is Unsuitable for Terminal Output
-Jetpack Compose's declarative UI model is optimal for standard Android screens. However, terminal rendering receives dozens of ANSI stream fragments per second containing cursor positioning, 256-color escape codes, and UTF-8 multi-byte glyphs.
-Triggering Compose recompositions at this frequency causes frame drops, GC pressure, and UI jank.
+> Status 2026-09-17: Opsi A dikunci mas mufid — tetap Compose `Text`, tambah warna
+> semantik, koreksi dokumen. Opsi B (Termux `terminal-view` asli) ditunda sampai
+> ada bukti TUI nyata yang gagal dirender buffer ini. Versi dokumen sebelumnya
+> yang mengklaim Termux/SurfaceView sudah dihapus karena tidak ada di kode.
 
-#### 3.2 Hybrid Architecture: `AndroidView` Bridge
-Terminal Mirror adopts the proven architecture used by high-performance Android terminal emulators (Termux, NyaMux):
+#### 3.1 Data Flow (yang benar-benar ada di kode)
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                     Jetpack Compose Hierarchy                   │
-│  • Scaffold, TopAppBar, TabRow, Workstation Switcher            │
-│  • Accessory Bar, Settings Sheet, Biometric Lock Dialog         │
+│  • Scaffold, TopAppBar, ScrollableTabRow, ConnectionStatusCard  │
+│  • Accessory Bar (LazyRow 48dp), command TextField              │
 ├─────────────────────────────────────────────────────────────────┤
-│                               ▼                                 │
-│        AndroidView(factory = { TerminalView(context) })         │
+│  Terminal viewport: single Text with AnnotatedString spans      │
+│  • TerminalLineClassifier: ERROR/SUCCESS/MUTED/NORMAL per line  │
+│  • SpanStyle colors from TerminalColors (Error/Success/Muted)   │
 ├─────────────────────────────────────────────────────────────────┤
-│                     Termux Terminal Subsystem                   │
-│  • TerminalView: SurfaceView subclass with dedicated draw thread│
-│  • TerminalSession: Manages vt100 virtual grid & cursor state   │
-│  • TerminalRenderer: Hardware-accelerated text & color rendering│
+│  terminal/ subsystem (unit-tested, JVM)                         │
+│  • TerminalScreenBuffer: 80×24 2D matrix, ANSI CSI cursor,      │
+│    line/screen erase (2J/2K), alternate screen (?1049)          │
+│  • TerminalBufferProcessor: ZLE backspace dedup, CRLF, strip    │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-#### 3.3 TerminalView Integration Spec
-```kotlin
-@Composable
-fun HardwareTerminalCanvas(
-    terminalSession: TerminalSession,
-    isReadOnly: Boolean,
-    modifier: Modifier = Modifier
-) {
-    AndroidView(
-        factory = { context ->
-            TerminalView(context, null).apply {
-                attachSession(terminalSession)
-                setTextSize(12.spToPx(context))
-                setTerminalViewClient(object : TerminalViewClient {
-                    override fun onScale(scale: Float): Float = scale
-                    override fun onSingleTapUp(e: MotionEvent) {
-                        if (!isReadOnly) requestFocus()
-                    }
-                    override fun shouldRuntimeClose(): Boolean = false
-                })
-            }
-        },
-        update = { view ->
-            if (view.currentSession != terminalSession) {
-                view.attachSession(terminalSession)
-            }
-        },
-        modifier = modifier.fillMaxSize()
-    )
-}
-```
+#### 3.2 Recomposition Discipline
+Stream fragments arrive at high frequency, so: state (`terminalBuffers`) is read
+at the leaf viewport only; auto-scroll reacts to buffer identity change; empty
+state is a static `ConnectionStatusCard` (zero per-frame cost). If profiler
+(Layout Inspector recomposition counts) ever shows the viewport dominating
+frames, the next step is line-batching/`derivedStateOf` — not a rewrite.
+
+#### 3.3 Deferred Option B (tidak aktif)
+Termux `terminal-view` (`com.termux.termux-app:terminal-view`, `TerminalView`
+extends `View` — bukan `SurfaceView`) tetap kandidat jika buffer sendiri terbukti
+gagal pada TUI nyata. Mengadopsinya berarti mengganti jantung rendering
+(`TerminalScreenBuffer`/`TerminalBufferProcessor` dibuang), menjembatani stream
+remote ke `TerminalSession` yang didesain untuk PTY lokal, dan menyelesaikan
+konflik IME dengan accessory bar — biaya besar, pemicu tegas, bukan spekulasi.
 
 ---
 
@@ -139,16 +123,16 @@ graph TD
         MacStream --> MacDecrypt[E2EE Decrypt & Decompress]
         WinStream --> WinDecrypt[E2EE Decrypt & Decompress]
         
-        MacDecrypt --> MacSession[Termux Session: mac-primary]
-        WinDecrypt --> WinSession[Termux Session: win-primary]
-        
-        MacSession -. Active Tab .-> Surface[TerminalView SurfaceView]
-        WinSession -. Background Tab .-> WinBuffer[(Virtual Buffer 10k lines)]
+        MacDecrypt --> MacBuffer[TerminalScreenBuffer: mac-primary]
+        WinDecrypt --> WinBuffer[TerminalScreenBuffer: win-primary]
+
+        MacBuffer -. Active Tab .-> Viewport[Compose Text + semantic spans]
+        WinBuffer -. Background Tab .-> WinBuffer
     end
 ```
 
-- **Active Tab**: Directly piped to the hardware `TerminalView` on screen.
-- **Background Tab**: Continues receiving deltas in background; updates its virtual `TerminalSession` buffer in memory without dropping packets. Switching tabs is instantaneous (< 16 ms) with zero reconnection latency.
+- **Active Tab**: Rendered from its `TerminalScreenBuffer` into the Compose viewport with semantic spans.
+- **Background Tab**: Continues receiving deltas in background into its own buffer without dropping packets. (Catatan jujur: klaim "< 16 ms" belum pernah diukur — menjadi acceptance WS7/uji profiler.)
 
 ---
 
@@ -223,16 +207,17 @@ apps/android/
 │           │   ├── service/
 │           │   │   └── TerminalMirrorService.kt  # Foreground Service & WakeLock
 │           │   ├── terminal/
-│           │   │   ├── TermuxBridge.kt           # SurfaceView TerminalView wrapper
-│           │   │   └── SessionRegistry.kt        # In-memory virtual terminal sessions
+│           │   │   ├── TerminalScreenBuffer.kt   # 80×24 matrix, CSI/erase/alt-screen
+│           │   │   └── TerminalBufferProcessor.kt # ZLE backspace, CRLF, ANSI strip
 │           │   └── ui/
+│           │       ├── TerminalUiHelpers.kt      # subtitle, banner, keystroke encoder,
+│           │       │                             # relay config, line classifier (tested)
 │           │       ├── components/
-│           │       │   ├── AccessoryBar.kt       # Programmer keyboard row
-│           │       │   ├── StatusHeader.kt       # Lock / live streaming indicators
-│           │       │   └── WorkstationTabs.kt    # Swipeable session tabs
-│           │       ├── scanner/
-│           │       │   └── QrScannerScreen.kt    # CameraX QR pairing view
+│           │       │   ├── AccessoryBar.kt       # LazyRow 48dp + KILL + DISC
+│           │       │   ├── ConnectionStatusCard.kt # structured empty-state
+│           │       │   ├── StatusHeader.kt       # lock / live indicators
+│           │       │   ├── WorkstationTabs.kt    # scrollable tabs + short labels
+│           │       │   └── QrScannerDialog.kt    # CameraX QR pairing dialog
 │           │       └── theme/
-│           │           ├── Color.kt              # Dark terminal color palette
-│           │           └── Theme.kt              # Material 3 dark theme
+│           │           └── TerminalTheme.kt      # TerminalColors token tunggal
 ```

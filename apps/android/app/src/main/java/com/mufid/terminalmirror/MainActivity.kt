@@ -18,8 +18,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mufid.terminalmirror.ui.theme.TerminalColors
@@ -35,7 +38,9 @@ import com.mufid.terminalmirror.service.TerminalMirrorService
 import com.mufid.terminalmirror.terminal.TerminalBufferProcessor
 import com.mufid.terminalmirror.terminal.TerminalScreenBuffer
 import com.mufid.terminalmirror.ui.KeystrokeEncoder
+import com.mufid.terminalmirror.ui.LineTone
 import com.mufid.terminalmirror.ui.RelayConfig
+import com.mufid.terminalmirror.ui.TerminalLineClassifier
 import com.mufid.terminalmirror.ui.components.AccessoryBar
 import com.mufid.terminalmirror.ui.components.ConnectionStatusCard
 import com.mufid.terminalmirror.ui.components.QrScannerDialog
@@ -299,9 +304,22 @@ fun TerminalMirrorApp(
                         isReadOnly = isReadOnly
                     )
                 } else {
+                    // Semantic coloring: errors red, healthy lines green,
+                    // prompts muted — classified per line, never one color.
+                    val annotated = buildAnnotatedString {
+                        TerminalLineClassifier.spanLines(currentText).forEachIndexed { i, span ->
+                            if (i > 0) append("\n")
+                            val color = when (span.tone) {
+                                LineTone.ERROR -> TerminalColors.Error
+                                LineTone.SUCCESS -> TerminalColors.Success
+                                LineTone.MUTED -> TerminalColors.MutedText
+                                LineTone.NORMAL -> TerminalColors.TerminalText
+                            }
+                            withStyle(SpanStyle(color = color)) { append(span.line) }
+                        }
+                    }
                     Text(
-                        text = currentText,
-                        color = TerminalColors.TerminalText,
+                        text = annotated,
                         fontFamily = FontFamily.Monospace,
                         fontSize = 12.sp,
                         lineHeight = 16.sp,

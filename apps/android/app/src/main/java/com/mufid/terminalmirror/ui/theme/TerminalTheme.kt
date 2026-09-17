@@ -32,6 +32,10 @@ object TerminalColors {
     val AccentLight = Color(0xFF64B5F6)
     val Send = Color(0xFF238636)
 
+    // Terminal output semantics (WS6: error/success must differ visually)
+    val Error = Color(0xFFF85149)
+    val Success = Color(0xFF3FB950)
+
     // Status semantics
     val Live = Color(0xFF1B5E20)
     val LiveBright = Color(0xFF4CAF50)

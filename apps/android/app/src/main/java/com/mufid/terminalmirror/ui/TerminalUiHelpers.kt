@@ -65,6 +65,39 @@ object TerminalUiHelpers {
     }
 }
 
+enum class LineTone { ERROR, SUCCESS, MUTED, NORMAL }
+
+data class LineSpan(val line: String, val tone: LineTone)
+
+/**
+ * Very small line classifier for the terminal viewport. Keyword heuristics
+ * only — it never changes bytes on the wire, it only colors what is shown.
+ * ERROR wins over SUCCESS so a line like "0 passed, 1 failed" is red.
+ */
+object TerminalLineClassifier {
+    private val errorPattern =
+        Regex("error|failed|failure|fatal|panic|exception|traceback|unauthorized|rejected|denied|\\bkill\\b")
+    private val successPattern =
+        Regex("passed|success\\w*|healthy|connected|\\bok\\b|\\bdone\\b|✔|✓")
+    private val promptPattern = Regex("^\\s*[$%#>❯➜]")
+    private val inlinePromptPattern = Regex("[%$#>❯➜]\\s")
+
+    fun classifyLine(line: String): LineTone {
+        val lower = line.lowercase()
+        if (line.isBlank()) return LineTone.MUTED
+        if (errorPattern.containsMatchIn(lower)) return LineTone.ERROR
+        if (successPattern.containsMatchIn(lower)) return LineTone.SUCCESS
+        if (promptPattern.containsMatchIn(line)) return LineTone.MUTED
+        // Shell prompt mid-line ("host ~ % typed-command"): checked last so
+        // real signals (error/success keywords) always win.
+        if (inlinePromptPattern.containsMatchIn(line)) return LineTone.MUTED
+        return LineTone.NORMAL
+    }
+
+    fun spanLines(text: String): List<LineSpan> =
+        text.split("\n").map { LineSpan(it, classifyLine(it)) }
+}
+
 object KeystrokeEncoder {
 
     /**

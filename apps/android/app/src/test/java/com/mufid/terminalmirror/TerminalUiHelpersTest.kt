@@ -131,6 +131,50 @@ class TerminalUiHelpersTest {
     }
 
     @Test
+    fun `classifier marks failures as error`() {
+        for (line in listOf(
+            "error: Failed to spawn",
+            "test result: FAILED. 0 passed; 1 failed",
+            "thread 'main' panicked at src/main.rs",
+            "Traceback (most recent call last):",
+            "401 Unauthorized",
+            "0 passed, 1 failed"
+        )) {
+            assertEquals(line, LineTone.ERROR, TerminalLineClassifier.classifyLine(line))
+        }
+    }
+
+    @Test
+    fun `classifier marks healthy output as success`() {
+        for (line in listOf(
+            "test result: ok. 34 passed; 0 ignored",
+            "Container healthy",
+            "Connected to relay",
+            "[✓] All done"
+        )) {
+            assertEquals(line, LineTone.SUCCESS, TerminalLineClassifier.classifyLine(line))
+        }
+    }
+
+    @Test
+    fun `classifier mutes blanks and prompts without false positives`() {
+        assertEquals(LineTone.MUTED, TerminalLineClassifier.classifyLine("   "))
+        assertEquals(LineTone.MUTED, TerminalLineClassifier.classifyLine("anb-0826014 ~ % uptime"))
+        // "broken pipe" contains "ok" as substring but must NOT match \bok\b
+        assertEquals(LineTone.NORMAL, TerminalLineClassifier.classifyLine("broken pipe"))
+        assertEquals(LineTone.NORMAL, TerminalLineClassifier.classifyLine("Compiling terminal-mirror v0.1.0"))
+    }
+
+    @Test
+    fun `span lines preserves line count and order`() {
+        val spans = TerminalLineClassifier.spanLines("ok\nerror: x\nplain")
+        assertEquals(3, spans.size)
+        assertEquals(LineTone.SUCCESS, spans[0].tone)
+        assertEquals(LineTone.ERROR, spans[1].tone)
+        assertEquals(LineTone.NORMAL, spans[2].tone)
+    }
+
+    @Test
     fun `relay url builder rejects blank secrets`() {
         try {
             RelayConfig.wsUrl("relay.example.internal:8888", "", "mac-live-session")
