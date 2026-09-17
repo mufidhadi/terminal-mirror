@@ -19,6 +19,19 @@ object TerminalUiHelpers {
     }
 
     /**
+     * Pre-truncates long workstation names for the tab row so a single tab
+     * can never push siblings off-screen. Compose `ellipsis` remains as a
+     * second safety net for extreme font-scale settings.
+     */
+    fun shortHostLabel(hostName: String, maxChars: Int = 28): String {
+        val host = hostName.trim()
+        if (host.isEmpty()) return "Unknown host"
+        require(maxChars >= 4) { "maxChars must leave room for the ellipsis" }
+        if (host.length <= maxChars) return host
+        return host.take(maxChars - 1).trimEnd() + "…"
+    }
+
+    /**
      * Viewport-safe status lines. Deliberately avoids fixed-width ASCII box
      * drawing (which wraps and breaks on ~360dp phone viewports) and never
      * embeds real relay IPs or tokens. Callers join with "\n" into a

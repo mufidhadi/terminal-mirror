@@ -31,7 +31,9 @@ fun StatusHeader(
 ) {
     TopAppBar(
         title = {
-            Column(modifier = Modifier.fillMaxWidth(0.55f)) {
+            // No width constraint: TopAppBar gives the title slot all space
+            // left by actions; truncating it manually re-creates the bug.
+            Column {
                 Text(
                     text = "Terminal Mirror",
                     fontSize = 17.sp,

@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mufid.terminalmirror.model.OsType
 import com.mufid.terminalmirror.model.TerminalSession
+import com.mufid.terminalmirror.ui.TerminalUiHelpers
 
 @Composable
 fun WorkstationTabs(
@@ -55,7 +56,7 @@ fun WorkstationTabs(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = session.hostName,
+                            text = TerminalUiHelpers.shortHostLabel(session.hostName),
                             fontSize = 12.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,

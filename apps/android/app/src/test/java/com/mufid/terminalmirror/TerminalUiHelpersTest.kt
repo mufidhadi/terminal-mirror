@@ -85,6 +85,22 @@ class TerminalUiHelpersTest {
     }
 
     @Test
+    fun `short host label keeps short names intact`() {
+        assertEquals("MacBook Pro", TerminalUiHelpers.shortHostLabel("MacBook Pro"))
+        assertEquals("Unknown host", TerminalUiHelpers.shortHostLabel("   "))
+    }
+
+    @Test
+    fun `short host label truncates with ellipsis`() {
+        val long = "MacBook Pro 16-inch M4 Max (Darwin zsh)"
+        val short = TerminalUiHelpers.shortHostLabel(long, maxChars = 28)
+        assertTrue(short.length <= 28)
+        assertTrue(short.endsWith("…"))
+        assertFalse(short.contains(" …"))
+        assertTrue(short.startsWith("MacBook Pro 16-inch"))
+    }
+
+    @Test
     fun `relay url builder rejects blank secrets`() {
         try {
             RelayConfig.wsUrl("relay.example.internal:8888", "", "mac-live-session")
