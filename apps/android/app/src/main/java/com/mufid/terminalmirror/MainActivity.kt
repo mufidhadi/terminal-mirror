@@ -363,6 +363,12 @@ fun TerminalMirrorApp(
                     onEmergencyKill = {
                         sendKeystroke("CTRL+C")
                         onShowToast("Emergency Kill dispatched (Ctrl+C)")
+                    },
+                    onDisconnect = {
+                        activeSession?.let { session ->
+                            connectionManager.disconnectSession(session.sessionId)
+                            onShowToast("Session disconnected — tap refresh to reconnect")
+                        }
                     }
                 )
             }

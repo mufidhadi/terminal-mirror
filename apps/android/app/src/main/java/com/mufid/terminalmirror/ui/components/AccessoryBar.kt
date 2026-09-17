@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.sp
 fun AccessoryBar(
     onKeyPress: (String) -> Unit,
     onEmergencyKill: () -> Unit,
+    onDisconnect: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     // Horizontally scrollable: every key keeps its full label and a 48dp
@@ -54,7 +55,7 @@ fun AccessoryBar(
         }
 
         item(key = "KILL") {
-            // Emergency Kill Switch Button
+            // Emergency Kill Switch Button: SIGINT to the foreground process.
             Button(
                 onClick = onEmergencyKill,
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
@@ -68,6 +69,30 @@ fun AccessoryBar(
             ) {
                 Text(
                     text = "KILL",
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Visible
+                )
+            }
+        }
+
+        item(key = "DISC") {
+            // Session Disconnect Button: closes the WebSocket stream without
+            // touching the remote process. Deliberately NOT red: disconnect
+            // is reversible (tap refresh to reconnect), KILL is not.
+            Button(
+                onClick = onDisconnect,
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF3A3325),
+                    contentColor = Color(0xFFFFB74D)
+                ),
+                modifier = Modifier
+                    .widthIn(min = 72.dp)
+                    .height(48.dp)
+            ) {
+                Text(
+                    text = "DISC",
                     fontSize = 12.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Visible
