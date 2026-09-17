@@ -147,14 +147,15 @@ The app runs `TerminalMirrorService`:
 - **WakeLock**: `PowerManager.PARTIAL_WAKE_LOCK` held while at least one workstation stream is active.
 - **JobScheduler / WorkManager**: Fallback synchronization worker if service is ever killed by extreme OS memory pressure.
 
-#### 5.3 Network Roaming & Reconnection State Machine
-When switching from Home WiFi to Cellular 5G or entering an elevator:
-1. `ConnectivityManager.NetworkCallback` detects network drop (`onLost`).
-2. Immediate transition of UI indicator to `[RECONNECTING...]` without clearing the terminal screen.
-3. Exponential Backoff with Jitter:
+#### 5.3 Network Roaming & Reconnection State Machine (IMPLEMENTED, WS7)
+`ConnectionManager` exposes `ConnectionState` (`Disconnected/Connecting/Connected/Reconnecting(attempt, delayMs)`) per session:
+1. Socket drop → chip shows `… R<n>` (attempt) without clearing the terminal screen.
+2. Exponential Backoff with Jitter (unit-tested `ReconnectPolicy`):
    $$T_{\text{wait}} = \min(30000, 500 \times 2^n) + \text{random}(0, 1000) \text{ ms}$$
-4. Upon network restoration (`onAvailable`), the client re-establishes WebSocket tunnel and sends `SubscribeSession(last_sequence)`.
-5. If sequence gap is detected, Relay/Host dispatches a `ScreenStateSync` snapshot, restoring visual state without terminal artifact distortion.
+3. Outbound while down is queued (`OutboundQueue`, cap 200, drop-oldest counted) and drained in order on `onConnected` — never handed to a dead socket (`RelayClient.sendBinary()` drops silently).
+4. Input + accessory bar render only while `Connected`; offline shows an honest status line (attempt, queued/dropped counts). Manual `DISC` cancels retries via a generation guard (stale callbacks/retries from replaced clients are ignored).
+5. Known residuals: `Reconnecting` chip has no live countdown; queue counters refresh on state change only; a stale socket-failure arriving after a newer open within the same client is a theoretical liveness flip (needs epoch tracking in `RelayClient`).
+   `SubscribeSession(last_sequence)` gap-resync (step 4–5 of the old draft) is NOT implemented — backlog WS7-follow-up.
 
 ---
 
